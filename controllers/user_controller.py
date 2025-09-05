@@ -1,11 +1,12 @@
 from fastapi import HTTPException, Depends, Request
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 import secrets
+import uuid
 
 from models.user_models import UserCreate, UserUpdate, BaseUser, UserRole
 from utils.auth import hash_password, require_role, get_current_active_user
-from utils.database import db
+from utils.database import db, get_db
 from utils.helpers import serialize_doc, log_activity, send_sms, send_whatsapp
 
 class UserController:

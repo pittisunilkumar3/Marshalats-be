@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from routes import (
     auth_router,
     user_router,
+    coach_router,
     branch_router,
     course_router,
     enrollment_router,
@@ -64,6 +65,7 @@ app.add_middleware(
 app.include_router(superadmin_router, prefix="/api/superadmin", tags=["Super Admin"])
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(user_router, prefix="/api/users", tags=["Users"])
+app.include_router(coach_router, prefix="/api/coaches", tags=["Coaches"])
 app.include_router(branch_router, prefix="/api/branches", tags=["Branches"])
 app.include_router(course_router, prefix="/api/courses", tags=["Courses"])
 app.include_router(enrollment_router, prefix="/api/enrollments", tags=["Enrollments"])

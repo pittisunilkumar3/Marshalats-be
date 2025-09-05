@@ -9,6 +9,66 @@ Production: https://edumanage-44.preview.dev.com/api
 Development: http://localhost:8001/api
 ```
 
+## HTTP Status Codes
+The API uses standard HTTP status codes to indicate success or failure:
+
+### Success Codes
+- **200 OK**: Request successful, data returned
+- **201 Created**: Resource created successfully
+- **204 No Content**: Request successful, no content to return
+
+### Client Error Codes
+- **400 Bad Request**: Invalid request data or validation errors
+- **401 Unauthorized**: Authentication required or invalid credentials
+- **403 Forbidden**: Valid authentication but insufficient permissions
+- **404 Not Found**: Requested resource not found
+- **409 Conflict**: Resource already exists (e.g., duplicate email)
+- **422 Unprocessable Entity**: Request data validation failed
+- **429 Too Many Requests**: Rate limit exceeded
+
+### Server Error Codes
+- **500 Internal Server Error**: Server-side error occurred
+- **503 Service Unavailable**: Server temporarily unavailable
+
+## Response Format
+All API responses follow a consistent JSON structure:
+
+### Success Response Format
+```json
+{
+  "message": "Operation completed successfully",
+  "data": {
+    // Actual response data
+  },
+  "timestamp": "2025-01-07T12:00:00Z"
+}
+```
+
+### Error Response Format
+```json
+{
+  "detail": "Error description",
+  "error_code": "VALIDATION_ERROR",
+  "timestamp": "2025-01-07T12:00:00Z",
+  "path": "/api/coaches",
+  "method": "POST"
+}
+```
+
+### Validation Error Format (422)
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "field_name"],
+      "msg": "Field required",
+      "input": {}
+    }
+  ]
+}
+```
+
 ## Authentication
 The API uses JWT (JSON Web Token) for authentication with **two separate authentication systems**:
 
@@ -40,6 +100,12 @@ Authorization: Bearer <your_jwt_token>
 3. **Extract Token**: Copy the `token` from the response
 4. **Use Token**: Include in Authorization header for super admin operations
 
+#### For Coach Operations:
+1. **Login**: POST `/api/coaches/login` with email and password
+2. **Extract Token**: Copy the `access_token` from the response
+3. **Use Token**: Include in Authorization header for coach operations
+4. **Access**: Can view own profile, limited permissions
+
 #### For Regular User Operations:
 1. **Login**: POST `/api/auth/login` with email and password
 2. **Extract Token**: Copy the `access_token` from the response  
@@ -48,6 +114,246 @@ Authorization: Bearer <your_jwt_token>
 ### Authentication Header Format
 ```
 Authorization: Bearer <your_jwt_token>
+```
+
+## Quick Start Guide
+
+### 1. Testing Coach Creation (Complete Example)
+
+**Step 1: Start the server**
+```bash
+cd /path/to/backend
+python server.py
+```
+
+**Step 2: Test Coach Creation (Without Auth - Will Fail)**
+```bash
+curl -X POST "http://localhost:8001/api/coaches" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "personal_info": {
+      "first_name": "Test",
+      "last_name": "Coach",
+      "gender": "Male",
+      "date_of_birth": "1990-01-01"
+    },
+    "contact_info": {
+      "email": "testcoach@example.com",
+      "country_code": "+91",
+      "phone": "9876543210",
+      "password": "TestPassword123!"
+    },
+    "address_info": {
+      "address": "123 Test Street",
+      "area": "Test Area",
+      "city": "Test City",
+      "state": "Test State",
+      "zip_code": "123456",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor's Degree",
+      "professional_experience": "3+ years",
+      "designation_id": "test-designation-001",
+      "certifications": ["Test Certification"]
+    },
+    "areas_of_expertise": ["Karate", "Self Defense"]
+  }'
+```
+
+**Expected Response (401 Unauthorized)**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**Step 3: Get Authentication Token (Login with existing user)**
+```bash
+curl -X POST "http://localhost:8001/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@example.com",
+    "password": "your_password"
+  }'
+```
+
+**Step 4: Use Token for Coach Creation**
+```bash
+# Replace YOUR_TOKEN_HERE with actual token from login response
+curl -X POST "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "personal_info": {
+      "first_name": "Test",
+      "last_name": "Coach",
+      "gender": "Male", 
+      "date_of_birth": "1990-01-01"
+    },
+    "contact_info": {
+      "email": "testcoach@example.com",
+      "country_code": "+91",
+      "phone": "9876543210",
+      "password": "TestPassword123!"
+    },
+    "address_info": {
+      "address": "123 Test Street",
+      "area": "Test Area",
+      "city": "Test City",
+      "state": "Test State",
+      "zip_code": "123456",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor's Degree",
+      "professional_experience": "3+ years",
+      "designation_id": "test-designation-001",
+      "certifications": ["Test Certification"]
+    },
+    "areas_of_expertise": ["Karate", "Self Defense"]
+  }'
+```
+
+### 2. API Documentation Access
+```bash
+# Interactive API Documentation (Swagger UI)
+http://localhost:8001/docs
+
+# Alternative API Documentation (ReDoc)
+http://localhost:8001/redoc
+
+# OpenAPI JSON Schema
+http://localhost:8001/openapi.json
+```
+
+### 3. Common Test Commands
+
+**Coach Login**:
+```bash
+curl -X POST "http://localhost:8001/api/coaches/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "coach@example.com",
+    "password": "CoachPassword123!"
+  }'
+```
+
+**Get Coach Profile** (after login):
+```bash
+curl -X GET "http://localhost:8001/api/coaches/me" \
+  -H "Authorization: Bearer COACH_TOKEN_HERE"
+```
+
+**Get All Coaches** (Admin only):
+```bash
+curl -X GET "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer ADMIN_TOKEN_HERE"
+```
+
+**Get Coach Statistics** (Admin only):
+```bash
+curl -X GET "http://localhost:8001/api/coaches/stats/overview" \
+  -H "Authorization: Bearer ADMIN_TOKEN_HERE"
+```
+
+**Update Coach** (Admin only):
+```bash
+curl -X PUT "http://localhost:8001/api/coaches/COACH_ID_HERE" \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "personal_info": {
+      "first_name": "Updated Name"
+    }
+  }'
+```
+
+## API Features
+
+### Rate Limiting
+- **Login Endpoints**: 5 attempts per minute per IP
+- **Registration Endpoints**: 3 attempts per minute per IP  
+- **General API Endpoints**: 100 requests per minute per authenticated user
+- **Public Endpoints**: 50 requests per minute per IP
+
+### Pagination
+Most list endpoints support pagination:
+- **Query Parameters**: `skip` (offset), `limit` (page size)
+- **Default Limit**: 50 items
+- **Maximum Limit**: 100 items
+- **Response Fields**: `total`, `page`, `limit`, `has_next`, `has_previous`
+
+### Filtering
+Many endpoints support filtering:
+- **Example**: `/api/coaches?active_only=true&area_of_expertise=Karate`
+- **Boolean Filters**: `active_only`, `is_verified`
+- **Text Filters**: `search`, `area_of_expertise`
+- **Date Filters**: `created_after`, `created_before`
+
+### CORS Support
+- **Enabled**: For all origins in development
+- **Production**: Configured for specific domains
+- **Methods**: GET, POST, PUT, DELETE, OPTIONS
+- **Headers**: Authorization, Content-Type, Accept
+
+### Data Validation
+- **Pydantic Models**: All request/response data validated
+- **Email Validation**: RFC compliant email addresses
+- **Phone Validation**: International phone number format
+- **Date Validation**: ISO 8601 date format (YYYY-MM-DD)
+- **Password Validation**: Minimum complexity requirements
+
+### Database
+- **MongoDB**: Document-based storage
+- **Collections**: Separate collections for users, coaches, branches, courses
+- **Indexing**: Optimized queries with proper indexing
+- **Relationships**: Embedded documents and references
+
+## Common Error Scenarios
+
+### Authentication Errors
+```bash
+# Missing token
+curl -X GET "http://localhost:8001/api/coaches"
+# Response: 401 {"detail": "Not authenticated"}
+
+# Invalid token
+curl -X GET "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer invalid_token"
+# Response: 401 {"detail": "Could not validate credentials"}
+
+# Expired token
+curl -X GET "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer expired_token"
+# Response: 401 {"detail": "Token has expired"}
+```
+
+### Validation Errors
+```bash
+# Missing required fields
+curl -X POST "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer valid_token" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+# Response: 422 with detailed validation errors
+
+# Invalid email format
+curl -X POST "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer valid_token" \
+  -H "Content-Type: application/json" \
+  -d '{"contact_info": {"email": "invalid-email"}}'
+# Response: 422 {"detail": [{"loc": ["contact_info", "email"], "msg": "value is not a valid email address"}]}
+```
+
+### Permission Errors
+```bash
+# Insufficient permissions (non-admin trying to create coach)
+curl -X POST "http://localhost:8001/api/coaches" \
+  -H "Authorization: Bearer student_token" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+# Response: 403 {"detail": "Not enough permissions to access this resource"}
 ```
 
 ### Example Authentication Flow
@@ -445,7 +751,7 @@ curl -X POST http://localhost:8001/api/auth/register \
 
 **Required Fields**: `email`, `password`
 
-**Response**:
+**Success Response (200 OK)**:
 ```json
 {
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwYjQ0Y2ViZi1mMGUxLTQ3MTYtYjUyMS0wZTNiYTI5MGU1YzQiLCJleHAiOjE3NTcxMzY3MDZ9.TzV1jpaRxAh0jRUPwZ5o8fAPuaBMNQsNgUAHhVKWZkI",
@@ -467,8 +773,54 @@ curl -X POST http://localhost:8001/api/auth/register \
     "branch": {
       "location_id": "location-uuid", 
       "branch_id": "branch-uuid"
-    }
+    },
+    "is_active": true,
+    "created_at": "2025-01-07T10:30:00Z",
+    "updated_at": "2025-01-07T10:30:00Z"
   }
+}
+```
+
+**Error Responses**:
+
+**401 Unauthorized** - Invalid Credentials:
+```json
+{
+  "detail": "Incorrect email or password"
+}
+```
+
+**422 Unprocessable Entity** - Validation Error:
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "email"],
+      "msg": "Field required",
+      "input": {}
+    },
+    {
+      "type": "string_type",
+      "loc": ["body", "password"],
+      "msg": "Input should be a valid string",
+      "input": null
+    }
+  ]
+}
+```
+
+**403 Forbidden** - Account Inactive:
+```json
+{
+  "detail": "Account is inactive. Please contact administrator."
+}
+```
+
+**429 Too Many Requests** - Rate Limiting:
+```json
+{
+  "detail": "Too many login attempts. Please try again later."
 }
 ```
 
@@ -597,6 +949,867 @@ Authorization: Bearer <your_jwt_token>
 ---
 
 ## 2. User Management
+
+### POST /api/coaches/login
+**Description**: Coach login endpoint to authenticate coaches and receive JWT token
+
+**Access**: Public (no authentication required)
+
+**Request Body**:
+```json
+{
+  "email": "coach@example.com",
+  "password": "CoachPassword123!"
+}
+```
+
+**Required Fields**: `email`, `password`
+
+**Success Response (200 OK)**:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "coach": {
+    "id": "67836f2a5b8e4c2f9a1d3e56",
+    "personal_info": {
+      "first_name": "Ravi",
+      "last_name": "Kumar",
+      "gender": "Male",
+      "date_of_birth": "1985-06-15"
+    },
+    "contact_info": {
+      "email": "coach@example.com",
+      "country_code": "+91",
+      "phone": "9876543210"
+    },
+    "address_info": {
+      "address": "123 MG Road",
+      "area": "Indiranagar",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "zip_code": "560038",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor's Degree",
+      "professional_experience": "5+ years",
+      "designation_id": "designation-uuid-1234",
+      "certifications": [
+        "Black Belt in Karate",
+        "Certified Fitness Trainer"
+      ]
+    },
+    "areas_of_expertise": [
+      "Taekwondo",
+      "Karate",
+      "Kung Fu",
+      "Mixed Martial Arts"
+    ],
+    "full_name": "Ravi Kumar",
+    "is_active": true,
+    "created_at": "2025-01-07T12:00:00Z",
+    "updated_at": "2025-01-07T12:00:00Z"
+  },
+  "expires_in": 86400,
+  "message": "Login successful"
+}
+```
+
+**Error Responses**:
+
+**401 Unauthorized** - Invalid Credentials:
+```json
+{
+  "detail": "Invalid email or password"
+}
+```
+
+**401 Unauthorized** - Account Inactive:
+```json
+{
+  "detail": "Account is inactive. Please contact administrator."
+}
+```
+
+**422 Unprocessable Entity** - Validation Error:
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "email"],
+      "msg": "Field required",
+      "input": {}
+    }
+  ]
+}
+```
+
+**cURL Example**:
+```bash
+curl -X POST "http://localhost:8001/api/coaches/login" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "coach@example.com",
+    "password": "CoachPassword123!"
+  }'
+```
+
+### GET /api/coaches/me
+**Description**: Get current authenticated coach's profile
+
+**Access**: Coach only
+
+**Headers**:
+```
+Authorization: Bearer <coach_jwt_token>
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "coach": {
+    "id": "67836f2a5b8e4c2f9a1d3e56",
+    "personal_info": {
+      "first_name": "Ravi",
+      "last_name": "Kumar",
+      "gender": "Male",
+      "date_of_birth": "1985-06-15"
+    },
+    "contact_info": {
+      "email": "coach@example.com",
+      "country_code": "+91",
+      "phone": "9876543210"
+    },
+    "address_info": {
+      "address": "123 MG Road",
+      "area": "Indiranagar",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "zip_code": "560038",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor's Degree",
+      "professional_experience": "5+ years",
+      "designation_id": "designation-uuid-1234",
+      "certifications": [
+        "Black Belt in Karate",
+        "Certified Fitness Trainer"
+      ]
+    },
+    "areas_of_expertise": [
+      "Taekwondo",
+      "Karate",
+      "Kung Fu",
+      "Mixed Martial Arts"
+    ],
+    "full_name": "Ravi Kumar",
+    "is_active": true,
+    "created_at": "2025-01-07T12:00:00Z",
+    "updated_at": "2025-01-07T12:00:00Z"
+  }
+}
+```
+
+**Error Responses**:
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Invalid authentication credentials"
+}
+```
+
+**403 Forbidden** - Not a Coach:
+```json
+{
+  "detail": "Insufficient permissions"
+}
+```
+
+### POST /api/coaches
+**Description**: Create new coach with comprehensive nested structure. This endpoint stores coach information in a structured format with personal, contact, address, and professional details in a dedicated coaches collection.
+
+**Access**: Super Admin, Coach Admin
+
+**Headers**:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "personal_info": {
+    "first_name": "Ravi",
+    "last_name": "Kumar",
+    "gender": "Male",
+    "date_of_birth": "1985-06-15"
+  },
+  "contact_info": {
+    "email": "coach@example.com",
+    "country_code": "+91",
+    "phone": "9876543210",
+    "password": "SecurePassword@123"
+  },
+  "address_info": {
+    "address": "123 MG Road",
+    "area": "Indiranagar",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "zip_code": "560038",
+    "country": "India"
+  },
+  "professional_info": {
+    "education_qualification": "Bachelor's Degree",
+    "professional_experience": "5+ years",
+    "designation_id": "designation-uuid-1234",
+    "certifications": [
+      "Black Belt in Karate",
+      "Certified Fitness Trainer"
+    ]
+  },
+  "areas_of_expertise": [
+    "Taekwondo",
+    "Karate",
+    "Kung Fu",
+    "Mixed Martial Arts"
+  ]
+}
+```
+
+**Required Fields**: All nested objects and their fields are required
+
+**Field Specifications**:
+- `personal_info.date_of_birth`: YYYY-MM-DD format (e.g., "1985-06-15")
+- `personal_info.gender`: Any string value (e.g., "Male", "Female", "Other")
+- `contact_info.email`: Must be a valid email address (unique)
+- `contact_info.country_code`: Phone country code (e.g., "+91", "+1")
+- `contact_info.phone`: Phone number without country code
+- `contact_info.password`: Auto-generated if not provided
+- `professional_info.certifications`: Array of certification strings
+- `areas_of_expertise`: Array of expertise area strings
+
+**Success Response (201 Created)**:
+```json
+{
+    "message": "Coach created successfully",
+    "coach_id": "4896e1fb-10c4-4a87-be0d-cf6733d7ee0b"
+}
+```
+
+**Error Responses**:
+
+**400 Bad Request** - Validation Error:
+```json
+{
+  "detail": [
+    {
+      "type": "missing",
+      "loc": ["body", "personal_info", "first_name"],
+      "msg": "Field required",
+      "input": {}
+    },
+    {
+      "type": "string_type",
+      "loc": ["body", "contact_info", "email"],
+      "msg": "Input should be a valid string",
+      "input": null
+    }
+  ]
+}
+```
+
+**409 Conflict** - Email Already Exists:
+```json
+{
+  "detail": "Coach with email coach@example.com already exists"
+}
+```
+
+**401 Unauthorized** - Invalid/Missing Token:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden** - Insufficient Permissions:
+```json
+{
+  "detail": "Not enough permissions to access this resource"
+}
+```
+
+**500 Internal Server Error** - Database Error:
+```json
+{
+  "detail": "Internal server error occurred while creating coach"
+}
+```
+
+**Database Storage**: Coaches are stored in a dedicated `coaches` collection separate from the general `users` collection.
+
+### GET /api/coaches
+**Description**: Get coaches with filtering options
+
+**Access**: Super Admin, Coach Admin
+
+**Query Parameters**:
+- `skip`: Number of coaches to skip (default: 0)
+- `limit`: Number of coaches to return (default: 50, max: 100)
+- `active_only`: Filter only active coaches (default: true)
+- `area_of_expertise`: Filter by specific area of expertise
+
+**Success Response (200 OK)**:
+```json
+{
+  "coaches": [
+    {
+      "id": "67836f2a5b8e4c2f9a1d3e56",
+      "personal_info": {
+        "first_name": "Ravi",
+        "last_name": "Kumar",
+        "gender": "Male",
+        "date_of_birth": "1985-06-15"
+      },
+      "contact_info": {
+        "email": "coach@example.com",
+        "country_code": "+91",
+        "phone": "9876543210"
+      },
+      "address_info": {
+        "address": "123 MG Road",
+        "area": "Indiranagar",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "zip_code": "560038",
+        "country": "India"
+      },
+      "professional_info": {
+        "education_qualification": "Bachelor's Degree",
+        "professional_experience": "5+ years",
+        "designation_id": "designation-uuid-1234",
+        "certifications": [
+          "Black Belt in Karate",
+          "Certified Fitness Trainer"
+        ]
+      },
+      "areas_of_expertise": [
+        "Taekwondo",
+        "Karate",
+        "Kung Fu",
+        "Mixed Martial Arts"
+      ],
+      "full_name": "Ravi Kumar",
+      "is_active": true,
+      "created_at": "2025-01-07T12:00:00Z",
+      "updated_at": "2025-01-07T12:00:00Z"
+    },
+    {
+      "id": "67836f2a5b8e4c2f9a1d3e57",
+      "personal_info": {
+        "first_name": "Priya",
+        "last_name": "Sharma",
+        "gender": "Female",
+        "date_of_birth": "1990-03-22"
+      },
+      "contact_info": {
+        "email": "priya.sharma@martialarts.com",
+        "country_code": "+91",
+        "phone": "9876543211"
+      },
+      "address_info": {
+        "address": "456 Brigade Road",
+        "area": "MG Road",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "zip_code": "560001",
+        "country": "India"
+      },
+      "professional_info": {
+        "education_qualification": "Masters in Sports Science",
+        "professional_experience": "7+ years",
+        "designation_id": "senior-coach-002",
+        "certifications": [
+          "Black Belt in Taekwondo",
+          "Certified Self Defense Instructor"
+        ]
+      },
+      "areas_of_expertise": [
+        "Taekwondo",
+        "Self Defense",
+        "Women's Self Defense"
+      ],
+      "full_name": "Priya Sharma",
+      "is_active": true,
+      "created_at": "2025-01-06T10:30:00Z",
+      "updated_at": "2025-01-06T10:30:00Z"
+    }
+  ],
+  "total": 15,
+  "page": 1,
+  "limit": 50,
+  "has_next": false,
+  "has_previous": false
+}
+```
+
+**Empty Result Response (200 OK)**:
+```json
+{
+  "coaches": [],
+  "total": 0,
+  "page": 1,
+  "limit": 50,
+  "has_next": false,
+  "has_previous": false
+}
+```
+
+**Error Responses**:
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden**:
+```json
+{
+  "detail": "Not enough permissions to access this resource"
+}
+```
+
+**422 Unprocessable Entity** - Invalid Query Parameters:
+```json
+{
+  "detail": [
+    {
+      "type": "int_parsing",
+      "loc": ["query", "limit"],
+      "msg": "Input should be a valid integer",
+      "input": "invalid"
+    }
+  ]
+}
+```
+
+### GET /api/coaches/{coach_id}
+**Description**: Get coach by ID with complete information
+
+**Access**: Super Admin, Coach Admin
+
+**Path Parameters**:
+- `coach_id`: UUID of the coach
+
+**Success Response (200 OK)**:
+```json
+{
+  "id": "67836f2a5b8e4c2f9a1d3e56",
+  "personal_info": {
+    "first_name": "Ravi",
+    "last_name": "Kumar",
+    "gender": "Male",
+    "date_of_birth": "1985-06-15"
+  },
+  "contact_info": {
+    "email": "coach@example.com",
+    "country_code": "+91",
+    "phone": "9876543210"
+  },
+  "address_info": {
+    "address": "123 MG Road",
+    "area": "Indiranagar",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "zip_code": "560038",
+    "country": "India"
+  },
+  "professional_info": {
+    "education_qualification": "Bachelor's Degree",
+    "professional_experience": "5+ years",
+    "designation_id": "designation-uuid-1234",
+    "certifications": [
+      "Black Belt in Karate",
+      "Certified Fitness Trainer"
+    ]
+  },
+  "areas_of_expertise": [
+    "Taekwondo",
+    "Karate",
+    "Kung Fu",
+    "Mixed Martial Arts"
+  ],
+  "full_name": "Ravi Kumar",
+  "is_active": true,
+  "created_at": "2025-01-07T12:00:00Z",
+  "updated_at": "2025-01-07T12:00:00Z"
+}
+```
+
+**Error Responses**:
+
+**404 Not Found**:
+```json
+{
+  "detail": "Coach not found"
+}
+```
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden**:
+```json
+{
+  "detail": "Not enough permissions to access this resource"
+}
+```
+
+**422 Unprocessable Entity** - Invalid Coach ID:
+```json
+{
+  "detail": [
+    {
+      "type": "string_type",
+      "loc": ["path", "coach_id"],
+      "msg": "Input should be a valid string",
+      "input": null
+    }
+  ]
+}
+```
+
+### PUT /api/coaches/{coach_id}
+**Description**: Update coach information with nested structure
+
+**Access**: Super Admin, Coach Admin
+
+**Path Parameters**:
+- `coach_id`: UUID of the coach to update
+
+**Request Body** (all fields are optional):
+```json
+{
+  "personal_info": {
+    "first_name": "Updated Name",
+    "last_name": "Updated Lastname",
+    "gender": "Male",
+    "date_of_birth": "1985-06-15"
+  },
+  "contact_info": {
+    "email": "newemail@example.com",
+    "country_code": "+91",
+    "phone": "9876543211",
+    "password": "NewPassword@123"
+  },
+  "areas_of_expertise": [
+    "Taekwondo",
+    "Karate",
+    "Self Defense"
+  ]
+}
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "message": "Coach updated successfully",
+  "coach": {
+    "id": "67836f2a5b8e4c2f9a1d3e56",
+    "personal_info": {
+      "first_name": "Updated Name",
+      "last_name": "Updated Lastname",
+      "gender": "Male",
+      "date_of_birth": "1985-06-15"
+    },
+    "contact_info": {
+      "email": "newemail@example.com",
+      "country_code": "+91",
+      "phone": "9876543211"
+    },
+    "address_info": {
+      "address": "123 MG Road",
+      "area": "Indiranagar",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "zip_code": "560038",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor's Degree",
+      "professional_experience": "5+ years",
+      "designation_id": "designation-uuid-1234",
+      "certifications": [
+        "Black Belt in Karate",
+        "Certified Fitness Trainer"
+      ]
+    },
+    "areas_of_expertise": [
+      "Taekwondo",
+      "Karate",
+      "Self Defense"
+    ],
+    "full_name": "Updated Name Updated Lastname",
+    "is_active": true,
+    "created_at": "2025-01-07T12:00:00Z",
+    "updated_at": "2025-01-07T15:30:00Z"
+  }
+}
+```
+
+**Error Responses**:
+
+**404 Not Found**:
+```json
+{
+  "detail": "Coach not found"
+}
+```
+
+**409 Conflict** - Email Already Exists:
+```json
+{
+  "detail": "Coach with email newemail@example.com already exists"
+}
+```
+
+**400 Bad Request** - Validation Error:
+```json
+{
+  "detail": [
+    {
+      "type": "value_error",
+      "loc": ["body", "contact_info", "email"],
+      "msg": "value is not a valid email address",
+      "input": "invalid-email"
+    }
+  ]
+}
+```
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden**:
+```json
+{
+  "detail": "Not enough permissions to access this resource"
+}
+```
+
+### DELETE /api/coaches/{coach_id}
+**Description**: Deactivate coach (sets is_active to false)
+
+**Access**: Super Admin only
+
+**Path Parameters**:
+- `coach_id`: UUID of the coach to deactivate
+
+**Success Response (200 OK)**:
+```json
+{
+  "message": "Coach deactivated successfully",
+  "coach_id": "67836f2a5b8e4c2f9a1d3e56",
+  "status": "deactivated"
+}
+```
+
+**Error Responses**:
+
+**404 Not Found**:
+```json
+{
+  "detail": "Coach not found"
+}
+```
+
+**400 Bad Request** - Coach Already Inactive:
+```json
+{
+  "detail": "Coach is already inactive"
+}
+```
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden**:
+```json
+{
+  "detail": "Not enough permissions to access this resource. Super Admin access required."
+}
+```
+
+### GET /api/coaches/stats/overview
+**Description**: Get coach statistics and analytics
+
+**Access**: Super Admin, Coach Admin
+
+**Success Response (200 OK)**:
+```json
+{
+  "total_coaches": 25,
+  "active_coaches": 22,
+  "inactive_coaches": 3,
+  "expertise_distribution": [
+    {
+      "_id": "Karate",
+      "count": 15,
+      "percentage": 60.0
+    },
+    {
+      "_id": "Taekwondo",
+      "count": 12,
+      "percentage": 48.0
+    },
+    {
+      "_id": "Mixed Martial Arts",
+      "count": 8,
+      "percentage": 32.0
+    },
+    {
+      "_id": "Self Defense",
+      "count": 6,
+      "percentage": 24.0
+    },
+    {
+      "_id": "Kung Fu",
+      "count": 4,
+      "percentage": 16.0
+    }
+  ],
+  "recent_additions": [
+    {
+      "id": "67836f2a5b8e4c2f9a1d3e56",
+      "full_name": "Ravi Kumar",
+      "areas_of_expertise": ["Karate", "Taekwondo"],
+      "created_at": "2025-01-07T12:00:00Z"
+    },
+    {
+      "id": "67836f2a5b8e4c2f9a1d3e57",
+      "full_name": "Priya Sharma",
+      "areas_of_expertise": ["Taekwondo", "Self Defense"],
+      "created_at": "2025-01-06T10:30:00Z"
+    }
+  ],
+  "statistics_generated_at": "2025-01-07T16:45:00Z"
+}
+```
+
+**Error Responses**:
+
+**401 Unauthorized**:
+```json
+{
+  "detail": "Could not validate credentials"
+}
+```
+
+**403 Forbidden**:
+```json
+{
+  "detail": "Not enough permissions to access this resource"
+}
+```
+
+**500 Internal Server Error**:
+```json
+{
+  "detail": "Error generating coach statistics"
+}
+```
+
+## Super Admin Coach Management
+
+### POST /api/superadmin/coaches
+**Description**: Create coach using super admin authentication
+
+**Access**: Super Admin only (uses superadmin token)
+
+**Headers**:
+```
+Authorization: Bearer <super_admin_jwt_token>
+Content-Type: application/json
+```
+
+**Request Body**: Same format as regular coach creation above.
+
+**Success Response (201 Created)**: Same format as regular coach creation above.
+
+**Error Responses**: Same as regular coach creation, plus:
+
+**403 Forbidden** - Super Admin Required:
+```json
+{
+  "detail": "Super Admin access required"
+}
+```
+
+### GET /api/superadmin/coaches
+**Description**: Get coaches using super admin authentication
+
+**Access**: Super Admin only
+
+**Query Parameters**: Same as regular coaches endpoint
+
+**Success Response (200 OK)**: Same format as regular coaches list above.
+
+**Error Responses**: Same as regular coaches list, plus super admin access restrictions.
+
+### GET /api/superadmin/coaches/{coach_id}
+**Description**: Get coach by ID using super admin authentication
+
+**Access**: Super Admin only
+
+**Success Response (200 OK)**: Same format as regular coach details above.
+
+**Error Responses**: Same as regular coach details, plus super admin access restrictions.
+
+### PUT /api/superadmin/coaches/{coach_id}
+**Description**: Update coach using super admin authentication
+
+**Access**: Super Admin only
+
+**Success Response (200 OK)**: Same format as regular coach update above.
+
+**Error Responses**: Same as regular coach update, plus super admin access restrictions.
+
+### DELETE /api/superadmin/coaches/{coach_id}
+**Description**: Deactivate coach using super admin authentication
+
+**Access**: Super Admin only
+
+**Success Response (200 OK)**: Same format as regular coach deactivation above.
+
+**Error Responses**: Same as regular coach deactivation, plus super admin access restrictions.
+
+### GET /api/superadmin/coaches/stats/overview
+**Description**: Get coach statistics using super admin authentication
+
+**Access**: Super Admin only
+
+**Success Response (200 OK)**: Same format as regular coach statistics above.
+
+**Error Responses**: Same as regular coach statistics, plus super admin access restrictions.
 
 ### POST /api/users
 **Description**: Create new user. Coach Admins can only create users for their own branch and cannot create other admin users (Super Admin or Coach Admin roles).
@@ -1510,14 +2723,60 @@ curl -X GET "http://localhost:8001/api/courses?category_id=cat-uuid&instructor_i
 
 ## User Management Examples
 
-### 1. Get All Users (Admin Only)
+### 1. Create New Coach with Nested Structure (Admin Only)
+```bash
+curl -X POST http://localhost:8001/api/users/coaches \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "personal_info": {
+      "first_name": "Ravi",
+      "last_name": "Kumar",
+      "gender": "Male",
+      "date_of_birth": "1985-06-15"
+    },
+    "contact_info": {
+      "email": "ravi.kumar@martialarts.com",
+      "country_code": "+91",
+      "phone": "9876543210",
+      "password": "SecurePassword@123"
+    },
+    "address_info": {
+      "address": "123 MG Road",
+      "area": "Indiranagar",
+      "city": "Bengaluru",
+      "state": "Karnataka",
+      "zip_code": "560038",
+      "country": "India"
+    },
+    "professional_info": {
+      "education_qualification": "Bachelor of Physical Education",
+      "professional_experience": "5+ years in martial arts training",
+      "designation_id": "senior-instructor-001",
+      "certifications": [
+        "Black Belt in Karate",
+        "Certified Fitness Trainer",
+        "Sports Injury Prevention Certificate"
+      ]
+    },
+    "areas_of_expertise": [
+      "Taekwondo",
+      "Karate",
+      "Kung Fu",
+      "Mixed Martial Arts",
+      "Self Defense"
+    ]
+  }'
+```
+
+### 2. Get All Users (Admin Only)
 ```bash
 curl -X GET http://localhost:8001/api/users \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json"
 ```
 
-### 2. Create New User (Admin Only)
+### 3. Create New User (Admin Only)
 ```bash
 curl -X POST http://localhost:8001/api/users \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
@@ -1607,6 +2866,81 @@ Import `Student_Management_API_Bearer_Auth.postman_collection.json` into Postman
 - ✅ **Secure Endpoints** (All protected routes require authentication)
 - ✅ **Consistent Data Storage** (Nested structures preserved in database)
 - ✅ **RESTful Design** (Standard HTTP methods and status codes)
+- ✅ **Separate Coach Management** (Dedicated coaches collection and endpoints)
+- ✅ **Comprehensive Error Handling** (Detailed error responses and status codes)
+- ✅ **Data Validation** (Pydantic models with comprehensive validation)
+- ✅ **Rate Limiting** (Protection against abuse)
+- ✅ **CORS Support** (Cross-origin resource sharing)
+
+## Troubleshooting
+
+### Common Issues
+
+**1. Server Won't Start**
+```bash
+# Check Python version (requires 3.7+)
+python --version
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Check port availability
+netstat -an | findstr :8001  # Windows
+lsof -i :8001  # Linux/macOS
+```
+
+**2. Authentication Issues**
+```bash
+# Test token validity
+curl -X GET "http://localhost:8001/api/auth/me" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Expected response: User profile (200 OK)
+# If 401: Token expired or invalid
+```
+
+**3. Database Connection Issues**
+```bash
+# Check MongoDB connection
+# Verify database configuration in utils/database.py
+# Ensure MongoDB is running locally or connection string is correct
+```
+
+**4. CORS Issues**
+```javascript
+// Frontend JavaScript example
+fetch('http://localhost:8001/api/coaches', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer ' + token,
+    'Content-Type': 'application/json',
+  },
+})
+.then(response => response.json())
+.then(data => console.log(data));
+```
+
+**5. Validation Errors**
+- **Check Required Fields**: All nested objects must have required fields
+- **Email Format**: Must be valid email address
+- **Date Format**: Use YYYY-MM-DD format
+- **Phone Format**: Country code + phone number
+
+### Support
+- **API Documentation**: `http://localhost:8001/docs` (Swagger UI)
+- **Alternative Docs**: `http://localhost:8001/redoc` (ReDoc)
+- **OpenAPI Schema**: `http://localhost:8001/openapi.json`
+
+### Version Information
+- **API Version**: 1.0
+- **FastAPI Version**: Latest
+- **Python Version**: 3.7+
+- **Database**: MongoDB
+- **Authentication**: JWT Bearer Tokens
 
 ---
+
+**Last Updated**: January 2025  
+**Documentation Version**: 2.0  
+**API Status**: ✅ Active and Stable
 

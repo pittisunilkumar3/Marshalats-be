@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from controllers.superadmin_controller import SuperAdminController
+from controllers.coach_controller import CoachController
 from models.superadmin_models import SuperAdminRegister, SuperAdminLogin
+from models.coach_models import CoachCreate, CoachUpdate
 
 router = APIRouter()
 security = HTTPBearer()
@@ -43,3 +45,76 @@ async def verify_token(current_admin = Depends(get_current_superadmin)):
             "full_name": current_admin["full_name"]
         }
     }
+
+@router.post("/coaches")
+async def create_coach_as_superadmin(
+    coach_data: CoachCreate,
+    request: Request,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Create new coach with nested structure (Super Admin only)"""
+    # Convert current_admin to the format expected by CoachController
+    admin_user = {
+        "id": current_admin["id"],
+        "full_name": current_admin["full_name"],
+        "role": "super_admin"
+    }
+    
+    return await CoachController.create_coach(coach_data, request, admin_user)
+
+@router.get("/coaches")
+async def get_coaches_as_superadmin(
+    skip: int = 0,
+    limit: int = 50,
+    active_only: bool = True,
+    area_of_expertise: str = None,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Get coaches with filtering (Super Admin only)"""
+    return await CoachController.get_coaches(skip, limit, active_only, area_of_expertise)
+
+@router.get("/coaches/{coach_id}")
+async def get_coach_by_id_as_superadmin(
+    coach_id: str,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Get coach by ID (Super Admin only)"""
+    return await CoachController.get_coach_by_id(coach_id)
+
+@router.put("/coaches/{coach_id}")
+async def update_coach_as_superadmin(
+    coach_id: str,
+    coach_update: CoachUpdate,
+    request: Request,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Update coach information (Super Admin only)"""
+    admin_user = {
+        "id": current_admin["id"],
+        "full_name": current_admin["full_name"],
+        "role": "super_admin"
+    }
+    
+    return await CoachController.update_coach(coach_id, coach_update, request, admin_user)
+
+@router.delete("/coaches/{coach_id}")
+async def deactivate_coach_as_superadmin(
+    coach_id: str,
+    request: Request,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Deactivate coach (Super Admin only)"""
+    admin_user = {
+        "id": current_admin["id"],
+        "full_name": current_admin["full_name"],
+        "role": "super_admin"
+    }
+    
+    return await CoachController.deactivate_coach(coach_id, request, admin_user)
+
+@router.get("/coaches/stats/overview")
+async def get_coach_stats_as_superadmin(
+    current_admin = Depends(get_current_superadmin)
+):
+    """Get coach statistics (Super Admin only)"""
+    return await CoachController.get_coach_stats()

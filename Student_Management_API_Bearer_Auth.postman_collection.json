@@ -189,6 +189,27 @@
           }
         },
         {
+          "name": "Create Coach (Nested Structure)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personal_info\": {\n    \"first_name\": \"Ravi\",\n    \"last_name\": \"Kumar\",\n    \"gender\": \"Male\",\n    \"date_of_birth\": \"1985-06-15\"\n  },\n  \"contact_info\": {\n    \"email\": \"coach@example.com\",\n    \"country_code\": \"+91\",\n    \"phone\": \"9876543210\",\n    \"password\": \"SecurePassword@123\"\n  },\n  \"address_info\": {\n    \"address\": \"123 MG Road\",\n    \"area\": \"Indiranagar\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"zip_code\": \"560038\",\n    \"country\": \"India\"\n  },\n  \"professional_info\": {\n    \"education_qualification\": \"Bachelor's Degree\",\n    \"professional_experience\": \"5+ years\",\n    \"designation_id\": \"designation-uuid-1234\",\n    \"certifications\": [\n      \"Black Belt in Karate\",\n      \"Certified Fitness Trainer\"\n    ]\n  },\n  \"areas_of_expertise\": [\n    \"Taekwondo\",\n    \"Karate\",\n    \"Kung Fu\",\n    \"Mixed Martial Arts\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/coaches",
+              "host": ["{{base_url}}"],
+              "path": ["users", "coaches"]
+            }
+          }
+        },
+        {
           "name": "Create User",
           "request": {
             "method": "POST",
