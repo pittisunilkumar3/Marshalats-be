@@ -17,6 +17,7 @@ from routes import (
     request_router,
     event_router
 )
+from routes.superadmin_routes import router as superadmin_router
 
 # Import database utility
 from utils.database import db
@@ -60,6 +61,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(superadmin_router, prefix="/api/superadmin", tags=["Super Admin"])
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(user_router, prefix="/api/users", tags=["Users"])
 app.include_router(branch_router, prefix="/api/branches", tags=["Branches"])

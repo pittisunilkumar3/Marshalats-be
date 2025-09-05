@@ -10,12 +10,40 @@ Development: http://localhost:8001/api
 ```
 
 ## Authentication
-The API uses JWT (JSON Web Token) for authentication. All protected endpoints require a valid bearer token.
+The API uses JWT (JSON Web Token) for authentication with **two separate authentication systems**:
 
-### Getting a Bearer Token
+### 1. Super Admin Authentication System
+- **Endpoint Prefix**: `/api/superadmin/`
+- **Purpose**: Dedicated auth system for super admin management
+- **Token Duration**: 24 hours
+- **Access**: Super admin registration, login, profile management
+- **Isolation**: Completely separate from regular user authentication
+
+### 2. Regular User Authentication System  
+- **Endpoint Prefix**: `/api/auth/`
+- **Purpose**: Authentication for students, coaches, coach admins, and regular super admins
+- **Token Duration**: Variable (configured in system)
+- **Access**: User registration, login, profile management, role-based operations
+- **Roles**: `student`, `coach`, `coach_admin`, `super_admin`
+
+### Authentication Header Format
+Both systems use the same header format:
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+### Getting Authentication Tokens
+
+#### For Super Admin Operations:
+1. **Register**: POST `/api/superadmin/register` (first time setup)
+2. **Login**: POST `/api/superadmin/login` with email and password
+3. **Extract Token**: Copy the `token` from the response
+4. **Use Token**: Include in Authorization header for super admin operations
+
+#### For Regular User Operations:
 1. **Login**: POST `/api/auth/login` with email and password
-2. **Extract Token**: Copy the `access_token` from the response
-3. **Use Token**: Include in Authorization header for all protected requests
+2. **Extract Token**: Copy the `access_token` from the response  
+3. **Use Token**: Include in Authorization header for user operations
 
 ### Authentication Header Format
 ```
@@ -137,6 +165,187 @@ curl -X POST http://localhost:8001/api/auth/login \
 ---
 
 # API Endpoints
+
+## 0. Super Admin Authentication
+
+### POST /api/superadmin/register
+**Description**: Register a new super admin (isolated auth system for super admin management)
+
+**Access**: Public (no authentication required)
+
+**Request Body**:
+```json
+{
+  "full_name": "John Doe",
+  "email": "superadmin@example.com",
+  "password": "StrongPassword@123",
+  "phone": "+919876543210"
+}
+```
+
+**Required Fields**: `full_name`, `email`, `password`, `phone`
+
+**Field Specifications**:
+- `full_name`: Complete name of the super admin
+- `email`: Must be a valid email address (unique)
+- `password`: Strong password (recommend 8+ characters with special characters)
+- `phone`: Contact phone number with country code
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Super admin registered successfully",
+  "data": {
+    "id": "superadmin-uuid-1234",
+    "full_name": "John Doe",
+    "email": "superadmin@example.com",
+    "phone": "+919876543210",
+    "is_active": true,
+    "created_at": "2025-09-05T12:00:00Z",
+    "updated_at": "2025-09-05T12:00:00Z"
+  }
+}
+```
+
+**cURL Example**:
+```bash
+curl -X POST http://localhost:8001/api/superadmin/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "full_name": "Super Admin",
+    "email": "admin@company.com",
+    "password": "SecurePass@2025",
+    "phone": "+919123456789"
+  }'
+```
+
+**Error Responses**:
+- `400`: Email already exists
+- `422`: Validation errors (invalid email format, missing fields)
+
+### POST /api/superadmin/login
+**Description**: Super admin login - authenticate and receive JWT token (24-hour expiry)
+
+**Access**: Public (no authentication required)
+
+**Request Body**:
+```json
+{
+  "email": "superadmin@example.com",
+  "password": "StrongPassword@123"
+}
+```
+
+**Required Fields**: `email`, `password`
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Login successful",
+  "data": {
+    "id": "superadmin-uuid-1234",
+    "full_name": "John Doe",
+    "email": "superadmin@example.com",
+    "phone": "+919876543210",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "bearer",
+    "expires_in": 86400
+  }
+}
+```
+
+**cURL Example**:
+```bash
+curl -X POST http://localhost:8001/api/superadmin/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@company.com",
+    "password": "SecurePass@2025"
+  }'
+```
+
+**Response Fields**:
+- `token`: JWT token for super admin authentication
+- `token_type`: Always "bearer"
+- `expires_in`: Token expiry time in seconds (86400 = 24 hours)
+
+**Usage**: Save the `token` and use as `Authorization: Bearer <token>` for all super admin protected endpoints.
+
+**Error Responses**:
+- `401`: Invalid email or password
+- `401`: Account is disabled
+
+### GET /api/superadmin/me
+**Description**: Get current super admin profile information
+
+**Access**: Super Admin only
+
+**Headers**: 
+```
+Authorization: Bearer <super_admin_jwt_token>
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "superadmin-uuid-1234",
+    "full_name": "John Doe",
+    "email": "superadmin@example.com",
+    "phone": "+919876543210",
+    "is_active": true,
+    "created_at": "2025-09-05T12:00:00Z",
+    "updated_at": "2025-09-05T12:00:00Z"
+  }
+}
+```
+
+**cURL Example**:
+```bash
+curl -X GET http://localhost:8001/api/superadmin/me \
+  -H "Authorization: Bearer your_superadmin_token_here" \
+  -H "Content-Type: application/json"
+```
+
+### GET /api/superadmin/verify-token
+**Description**: Verify if the super admin token is valid and not expired
+
+**Access**: Super Admin only
+
+**Headers**: 
+```
+Authorization: Bearer <super_admin_jwt_token>
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "message": "Token is valid",
+  "data": {
+    "id": "superadmin-uuid-1234",
+    "email": "superadmin@example.com",
+    "full_name": "John Doe"
+  }
+}
+```
+
+**cURL Example**:
+```bash
+curl -X GET http://localhost:8001/api/superadmin/verify-token \
+  -H "Authorization: Bearer your_superadmin_token_here" \
+  -H "Content-Type: application/json"
+```
+
+**Error Responses**:
+- `401`: Token has expired
+- `401`: Invalid authentication credentials
+- `401`: Super admin not found
+
+---
 
 ## 1. Authentication & User Management
 
@@ -1067,7 +1276,48 @@ curl -X POST http://localhost:8001/api/courses \
 
 # Complete API Usage Examples
 
-## Full Authentication Flow
+## Super Admin Authentication Flow
+
+### 1. Super Admin Registration (First Time Setup)
+```bash
+curl -X POST http://localhost:8001/api/superadmin/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "full_name": "System Administrator",
+    "email": "admin@company.com",
+    "password": "SecurePass@2025",
+    "phone": "+919123456789"
+  }'
+```
+
+### 2. Super Admin Login
+```bash
+curl -X POST http://localhost:8001/api/superadmin/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@company.com",
+    "password": "SecurePass@2025"
+  }'
+```
+**Extract the `token` from response for subsequent super admin operations.**
+
+### 3. Verify Super Admin Token
+```bash
+curl -X GET http://localhost:8001/api/superadmin/verify-token \
+  -H "Authorization: Bearer YOUR_SUPERADMIN_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### 4. Get Super Admin Profile
+```bash
+curl -X GET http://localhost:8001/api/superadmin/me \
+  -H "Authorization: Bearer YOUR_SUPERADMIN_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## Regular User Authentication Flow
+
+## Regular User Authentication Flow
 
 ### 1. User Registration (Public)
 ```bash
@@ -1325,6 +1575,9 @@ curl -X POST http://localhost:8001/api/users \
 
 ### Python Test Scripts
 ```bash
+# Super Admin authentication testing
+python test_superadmin_api.py
+
 # Comprehensive authentication testing
 python test_auth_bearer.py
 
@@ -1342,7 +1595,8 @@ python test_course_creation.py
 Import `Student_Management_API_Bearer_Auth.postman_collection.json` into Postman for GUI testing with automatic token management.
 
 ### Demo Credentials
-- **Super Admin**: `superadmin@test.com` / `SuperAdmin123!`
+- **Super Admin**: `superadmin@example.com` / `StrongPassword@123` (via Super Admin API)
+- **Regular Super Admin**: `superadmin@test.com` / `SuperAdmin123!` (via regular auth API)
 - **Test Users**: Created via registration endpoint
 
 ### API Features Summary
