@@ -5,7 +5,7 @@ from datetime import datetime
 from models.course_models import CourseCreate, CourseUpdate, Course
 from models.user_models import UserRole
 from utils.auth import require_role, get_current_active_user
-from utils.database import db
+from utils.database import get_db
 from utils.helpers import serialize_doc
 
 class CourseController:
@@ -14,35 +14,53 @@ class CourseController:
         course_data: CourseCreate,
         current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN]))
     ):
-        """Create new course"""
+        """Create new course with comprehensive nested structure"""
+        db = get_db()
         course = Course(**course_data.dict())
-        await db.courses.insert_one(course.dict())
+        
+        # Store the course with nested structure exactly as provided
+        course_dict = course.dict()
+        
+        await db.courses.insert_one(course_dict)
         return {"message": "Course created successfully", "course_id": course.id}
 
     @staticmethod
     async def get_courses(
-        branch_id: Optional[str] = None,
-        category: Optional[str] = None,
-        level: Optional[str] = None,
+        category_id: Optional[str] = None,
+        difficulty_level: Optional[str] = None,
+        instructor_id: Optional[str] = None,
+        active_only: bool = True,
         skip: int = 0,
         limit: int = 50,
         current_user: dict = Depends(get_current_active_user)
     ):
-        """Get courses"""
-        filter_query = {"is_active": True}
+        """Get courses with nested structure"""
+        db = get_db()
+        filter_query = {}
         
-        if category:
-            filter_query["category"] = category
-        if level:
-            filter_query["level"] = level
+        if active_only:
+            filter_query["settings.active"] = True
+        if category_id:
+            filter_query["category_id"] = category_id
+        if difficulty_level:
+            filter_query["difficulty_level"] = difficulty_level
+        if instructor_id:
+            filter_query["instructor_id"] = instructor_id
 
         courses = await db.courses.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
-        
-        # Filter by branch pricing if branch_id provided
-        if branch_id:
-            courses = [c for c in courses if branch_id in c.get("branch_pricing", {})]
-        
         return {"courses": serialize_doc(courses)}
+
+    @staticmethod
+    async def get_course(
+        course_id: str,
+        current_user: dict = Depends(get_current_active_user)
+    ):
+        """Get course by ID with nested structure"""
+        db = get_db()
+        course = await db.courses.find_one({"id": course_id})
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+        return serialize_doc(course)
 
     @staticmethod
     async def update_course(
@@ -50,8 +68,24 @@ class CourseController:
         course_update: CourseUpdate,
         current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
     ):
-        """Update course"""
-        update_data = {k: v for k, v in course_update.dict().items() if v is not None}
+        """Update course with nested structure"""
+        db = get_db()
+        
+        # Check if course exists
+        existing_course = await db.courses.find_one({"id": course_id})
+        if not existing_course:
+            raise HTTPException(status_code=404, detail="Course not found")
+        
+        # Coach Admin permission check
+        if current_user["role"] == UserRole.COACH_ADMIN:
+            # Check if user is the instructor of this course or can manage it
+            if existing_course.get("instructor_id") != current_user["id"]:
+                raise HTTPException(status_code=403, detail="You can only update courses where you are the instructor.")
+
+        update_data = {k: v for k, v in course_update.dict(exclude_unset=True).items()}
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No update data provided")
+
         update_data["updated_at"] = datetime.utcnow()
         
         result = await db.courses.update_one(
@@ -70,6 +104,7 @@ class CourseController:
         current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
     ):
         """Get statistics for a specific course."""
+        db = get_db()
         course = await db.courses.find_one({"id": course_id})
         if not course:
             raise HTTPException(status_code=404, detail="Course not found")

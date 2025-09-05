@@ -779,6 +779,292 @@ curl -X POST http://localhost:8001/api/branches \
 
 ---
 
+## 4. Course Management
+
+### POST /api/courses
+**Description**: Create new course with comprehensive nested structure
+
+**Access**: Super Admin only
+
+**Headers**:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "title": "Advanced Kung Fu Training",
+  "code": "KF-ADV-001",
+  "description": "A comprehensive course covering advanced Kung Fu techniques, discipline, and sparring practices.",
+  "martial_art_style_id": "style-uuid-1234",
+  "difficulty_level": "Advanced",
+  "category_id": "category-uuid-5678",
+  "instructor_id": "instructor-uuid-91011",
+  "student_requirements": {
+    "max_students": 20,
+    "min_age": 6,
+    "max_age": 65,
+    "prerequisites": [
+      "Basic fitness level",
+      "Prior martial arts experience"
+    ]
+  },
+  "course_content": {
+    "syllabus": "Week 1: Stance training, Week 2: Forms, Week 3: Advanced sparring, Week 4: Weapons basics...",
+    "equipment_required": [
+      "Gloves",
+      "Shin guards",
+      "Training uniform"
+    ]
+  },
+  "media_resources": {
+    "course_image_url": "https://example.com/course-image.jpg",
+    "promo_video_url": "https://youtube.com/watch?v=abcd1234"
+  },
+  "pricing": {
+    "currency": "INR",
+    "amount": 8500,
+    "branch_specific_pricing": false
+  },
+  "settings": {
+    "offers_certification": true,
+    "active": true
+  }
+}
+```
+
+**Required Fields**: All nested objects and their fields are required
+
+**Field Specifications**:
+- `title`: Course display name
+- `code`: Unique course identifier/code
+- `martial_art_style_id`: UUID reference to martial art style
+- `difficulty_level`: Skill level (e.g., "Beginner", "Intermediate", "Advanced")
+- `category_id`: UUID reference to course category
+- `instructor_id`: UUID reference to instructor/coach
+- `student_requirements.prerequisites`: Array of requirement strings
+- `course_content.equipment_required`: Array of required equipment items
+- `media_resources`: Optional URLs for course image and promotional video
+- `pricing.amount`: Course fee amount as number
+- `settings.active`: Boolean to enable/disable course
+
+**Response**:
+```json
+{
+  "message": "Course created successfully",
+  "course_id": "course-uuid"
+}
+```
+
+**cURL Example**:
+```bash
+curl -X POST http://localhost:8001/api/courses \
+  -H "Authorization: Bearer your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Beginner Karate Training",
+    "code": "KAR-BEG-001",
+    "description": "Introduction to Karate fundamentals and basic techniques.",
+    "martial_art_style_id": "style-karate-001",
+    "difficulty_level": "Beginner",
+    "category_id": "cat-martial-arts",
+    "instructor_id": "instructor-john-doe",
+    "student_requirements": {
+      "max_students": 15,
+      "min_age": 5,
+      "max_age": 70,
+      "prerequisites": ["Basic physical fitness"]
+    },
+    "course_content": {
+      "syllabus": "Week 1: Basic stances, Week 2: Blocking techniques, Week 3: Basic kicks, Week 4: Kata practice",
+      "equipment_required": ["Karate uniform", "Belt", "Protective gear"]
+    },
+    "media_resources": {
+      "course_image_url": "https://example.com/karate-course.jpg",
+      "promo_video_url": "https://youtube.com/watch?v=xyz123"
+    },
+    "pricing": {
+      "currency": "INR",
+      "amount": 5000,
+      "branch_specific_pricing": false
+    },
+    "settings": {
+      "offers_certification": true,
+      "active": true
+    }
+  }'
+```
+
+### GET /api/courses
+**Description**: Get all courses with comprehensive nested structure
+**Access**: All authenticated users
+**Query Parameters**:
+- `category_id`: Filter by category ID
+- `difficulty_level`: Filter by difficulty level
+- `instructor_id`: Filter by instructor ID
+- `active_only`: Filter active courses only (default: true)
+- `skip`: Skip records (pagination)
+- `limit`: Limit records (default: 50)
+
+**Response**:
+```json
+{
+  "courses": [
+    {
+      "id": "course-uuid",
+      "title": "Advanced Kung Fu Training",
+      "code": "KF-ADV-001",
+      "description": "A comprehensive course covering advanced Kung Fu techniques, discipline, and sparring practices.",
+      "martial_art_style_id": "style-uuid-1234",
+      "difficulty_level": "Advanced",
+      "category_id": "category-uuid-5678",
+      "instructor_id": "instructor-uuid-91011",
+      "student_requirements": {
+        "max_students": 20,
+        "min_age": 6,
+        "max_age": 65,
+        "prerequisites": [
+          "Basic fitness level",
+          "Prior martial arts experience"
+        ]
+      },
+      "course_content": {
+        "syllabus": "Week 1: Stance training, Week 2: Forms, Week 3: Advanced sparring, Week 4: Weapons basics...",
+        "equipment_required": [
+          "Gloves",
+          "Shin guards", 
+          "Training uniform"
+        ]
+      },
+      "media_resources": {
+        "course_image_url": "https://example.com/course-image.jpg",
+        "promo_video_url": "https://youtube.com/watch?v=abcd1234"
+      },
+      "pricing": {
+        "currency": "INR",
+        "amount": 8500.0,
+        "branch_specific_pricing": false
+      },
+      "settings": {
+        "offers_certification": true,
+        "active": true
+      },
+      "created_at": "2025-01-07T12:00:00Z",
+      "updated_at": "2025-01-07T12:00:00Z"
+    }
+  ]
+}
+```
+
+### GET /api/courses/{course_id}
+**Description**: Get course by ID with comprehensive nested structure
+**Access**: All authenticated users
+**Response**:
+```json
+{
+  "id": "course-uuid",
+  "title": "Advanced Kung Fu Training",
+  "code": "KF-ADV-001",
+  "description": "A comprehensive course covering advanced Kung Fu techniques, discipline, and sparring practices.",
+  "martial_art_style_id": "style-uuid-1234",
+  "difficulty_level": "Advanced",
+  "category_id": "category-uuid-5678",
+  "instructor_id": "instructor-uuid-91011",
+  "student_requirements": {
+    "max_students": 20,
+    "min_age": 6,
+    "max_age": 65,
+    "prerequisites": [
+      "Basic fitness level",
+      "Prior martial arts experience"
+    ]
+  },
+  "course_content": {
+    "syllabus": "Week 1: Stance training, Week 2: Forms, Week 3: Advanced sparring, Week 4: Weapons basics...",
+    "equipment_required": [
+      "Gloves",
+      "Shin guards",
+      "Training uniform"
+    ]
+  },
+  "media_resources": {
+    "course_image_url": "https://example.com/course-image.jpg",
+    "promo_video_url": "https://youtube.com/watch?v=abcd1234"
+  },
+  "pricing": {
+    "currency": "INR",
+    "amount": 8500.0,
+    "branch_specific_pricing": false
+  },
+  "settings": {
+    "offers_certification": true,
+    "active": true
+  },
+  "created_at": "2025-01-07T12:00:00Z",
+  "updated_at": "2025-01-07T12:00:00Z"
+}
+```
+
+### PUT /api/courses/{course_id}
+**Description**: Update course with comprehensive nested structure.
+**Access**: Super Admin, Coach Admin (instructor only)
+**Details**: Coach Admins can only update courses where they are listed as the instructor.
+**Request Body** (all fields are optional):
+```json
+{
+  "title": "Updated Course Title",
+  "description": "Updated course description",
+  "student_requirements": {
+    "max_students": 25,
+    "min_age": 8,
+    "max_age": 60,
+    "prerequisites": ["Updated prerequisites"]
+  },
+  "course_content": {
+    "syllabus": "Updated syllabus content",
+    "equipment_required": ["Updated equipment list"]
+  },
+  "pricing": {
+    "currency": "INR",
+    "amount": 9000,
+    "branch_specific_pricing": false
+  },
+  "settings": {
+    "offers_certification": true,
+    "active": true
+  }
+}
+```
+**Response**:
+```json
+{
+  "message": "Course updated successfully"
+}
+```
+
+### GET /api/courses/{course_id}/stats
+**Description**: Get statistics for a specific course.
+**Access**: Super Admin, Coach Admin
+**Response**:
+```json
+{
+  "course_details": {
+    "id": "course-uuid",
+    "title": "Advanced Kung Fu Training",
+    "instructor_id": "instructor-uuid-91011",
+    "settings": {
+      "offers_certification": true,
+      "active": true
+    }
+  },
+  "active_enrollments": 15
+}
+```
+
+---
+
 # Complete API Usage Examples
 
 ## Full Authentication Flow
@@ -897,6 +1183,81 @@ curl -X GET http://localhost:8001/api/branches/BRANCH_ID \
   -H "Content-Type: application/json"
 ```
 
+## Course Management Examples
+
+### 1. Create Comprehensive Course (Super Admin Only)
+```bash
+curl -X POST http://localhost:8001/api/courses \
+  -H "Authorization: Bearer YOUR_SUPER_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Advanced Kung Fu Training",
+    "code": "KF-ADV-001",
+    "description": "A comprehensive course covering advanced Kung Fu techniques, discipline, and sparring practices.",
+    "martial_art_style_id": "style-uuid-1234",
+    "difficulty_level": "Advanced",
+    "category_id": "category-uuid-5678",
+    "instructor_id": "instructor-uuid-91011",
+    "student_requirements": {
+      "max_students": 20,
+      "min_age": 6,
+      "max_age": 65,
+      "prerequisites": [
+        "Basic fitness level",
+        "Prior martial arts experience"
+      ]
+    },
+    "course_content": {
+      "syllabus": "Week 1: Stance training, Week 2: Forms, Week 3: Advanced sparring, Week 4: Weapons basics...",
+      "equipment_required": [
+        "Gloves",
+        "Shin guards",
+        "Training uniform"
+      ]
+    },
+    "media_resources": {
+      "course_image_url": "https://example.com/course-image.jpg",
+      "promo_video_url": "https://youtube.com/watch?v=abcd1234"
+    },
+    "pricing": {
+      "currency": "INR",
+      "amount": 8500,
+      "branch_specific_pricing": false
+    },
+    "settings": {
+      "offers_certification": true,
+      "active": true
+    }
+  }'
+```
+
+### 2. Get All Courses
+```bash
+curl -X GET http://localhost:8001/api/courses \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### 3. Get Specific Course
+```bash
+curl -X GET http://localhost:8001/api/courses/COURSE_ID \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+### 4. Filter Courses
+```bash
+# Filter by difficulty level
+curl -X GET "http://localhost:8001/api/courses?difficulty_level=Advanced" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+
+# Filter by category and instructor
+curl -X GET "http://localhost:8001/api/courses?category_id=cat-uuid&instructor_id=instructor-uuid" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
 ## User Management Examples
 
 ### 1. Get All Users (Admin Only)
@@ -972,6 +1333,9 @@ python simple_auth_test.py
 
 # Test complete branch API functionality
 python test_complete_branch_api.py
+
+# Test comprehensive course API functionality
+python test_course_creation.py
 ```
 
 ### Postman Collection

@@ -16,14 +16,22 @@ async def create_course(
 
 @router.get("")
 async def get_courses(
-    branch_id: Optional[str] = None,
-    category: Optional[str] = None,
-    level: Optional[str] = None,
+    category_id: Optional[str] = None,
+    difficulty_level: Optional[str] = None,
+    instructor_id: Optional[str] = None,
+    active_only: bool = True,
     skip: int = 0,
     limit: int = 50,
     current_user: dict = Depends(get_current_active_user)
 ):
-    return await CourseController.get_courses(branch_id, category, level, skip, limit, current_user)
+    return await CourseController.get_courses(category_id, difficulty_level, instructor_id, active_only, skip, limit, current_user)
+
+@router.get("/{course_id}")
+async def get_course(
+    course_id: str,
+    current_user: dict = Depends(get_current_active_user)
+):
+    return await CourseController.get_course(course_id, current_user)
 
 @router.put("/{course_id}")
 async def update_course(
