@@ -1,42 +1,65 @@
 from pydantic import BaseModel, Field, EmailStr
-from datetime import datetime
-from typing import Optional, Dict
+from datetime import datetime, date
+from typing import Optional, Dict, List
 import uuid
 
-class Branch(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    address: str
+class Address(BaseModel):
+    line1: str
+    area: str
     city: str
     state: str
     pincode: str
-    phone: str
+    country: str
+
+class BranchInfo(BaseModel):
+    name: str
+    code: str
     email: EmailStr
-    manager_id: Optional[str] = None
+    phone: str
+    address: Address
+
+class OperationalTiming(BaseModel):
+    day: str
+    open: str  # Format: "HH:MM"
+    close: str  # Format: "HH:MM"
+
+class OperationalDetails(BaseModel):
+    courses_offered: List[str]  # Course names for display purposes
+    timings: List[OperationalTiming]
+    holidays: List[str]  # List of date strings in YYYY-MM-DD format
+
+class Assignments(BaseModel):
+    accessories_available: bool
+    courses: List[str]  # List of course IDs (UUIDs)
+    branch_admins: List[str]  # List of user IDs (UUIDs) for coaches
+
+class BankDetails(BaseModel):
+    bank_name: str
+    account_number: str
+    upi_id: str
+
+class Branch(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    branch: BranchInfo
+    manager_id: str
+    operational_details: OperationalDetails
+    assignments: Assignments
+    bank_details: BankDetails
     is_active: bool = True
-    business_hours: Dict[str, Dict[str, str]] = {}
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class BranchCreate(BaseModel):
-    name: str
-    address: str
-    city: str
-    state: str
-    pincode: str
-    phone: str
-    email: EmailStr
-    manager_id: Optional[str] = None
-    business_hours: Optional[Dict[str, Dict[str, str]]] = {}
+    branch: BranchInfo
+    manager_id: str
+    operational_details: OperationalDetails
+    assignments: Assignments
+    bank_details: BankDetails
 
 class BranchUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    state: Optional[str] = None
-    pincode: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[EmailStr] = None
+    branch: Optional[BranchInfo] = None
     manager_id: Optional[str] = None
-    business_hours: Optional[Dict[str, Dict[str, str]]] = None
+    operational_details: Optional[OperationalDetails] = None
+    assignments: Optional[Assignments] = None
+    bank_details: Optional[BankDetails] = None
     is_active: Optional[bool] = None
