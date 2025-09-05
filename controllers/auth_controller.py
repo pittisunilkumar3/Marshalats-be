@@ -32,32 +32,64 @@ class AuthController:
         # Hash password
         hashed_password = hash_password(user_data.password)
         
-        # Create user dictionary manually to ensure all fields are included
+        # Generate full name from first and last name
+        full_name = f"{user_data.first_name} {user_data.last_name}".strip()
+        
+        # Create user dictionary with nested structure exactly as requested
         user_dict = {
             "id": str(uuid.uuid4()),
             "email": user_data.email,
             "phone": user_data.phone,
-            "full_name": user_data.full_name,
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "full_name": full_name,
             "role": user_data.role.value,  # Convert enum to string
-            "branch_id": user_data.branch_id,
             "biometric_id": user_data.biometric_id,
             "is_active": True,
-            "date_of_birth": user_data.date_of_birth.isoformat() if user_data.date_of_birth else None,  # Convert date to string
+            "date_of_birth": user_data.date_of_birth.isoformat() if user_data.date_of_birth else None,
             "gender": user_data.gender,
             "password": hashed_password,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
         
+        # Add nested course object if provided
+        if user_data.course:
+            user_dict["course"] = {
+                "category_id": user_data.course.category_id,
+                "course_id": user_data.course.course_id,
+                "duration": user_data.course.duration
+            }
+        
+        # Add nested branch object if provided
+        if user_data.branch:
+            user_dict["branch"] = {
+                "location_id": user_data.branch.location_id,
+                "branch_id": user_data.branch.branch_id
+            }
+        
         result = await db.users.insert_one(user_dict)
         
         # Send credentials via SMS (mock)
+        course_info = "No course selected"
+        if user_dict.get("course"):
+            course = user_dict["course"]
+            course_info = f"Course: {course['course_id']} ({course['duration']})"
+            
+        branch_info = "No branch assigned"
+        if user_dict.get("branch"):
+            branch = user_dict["branch"]
+            branch_info = f"Branch: {branch['branch_id']}"
+        
         sms_message = (
+            f"Welcome {user_dict['full_name']}!\n"
             f"Your account has been created.\n"
             f"Email: {user_dict['email']}\n"
             f"Password: {user_data.password}\n"
             f"Date of Birth: {user_dict['date_of_birth']}\n"
-            f"Gender: {user_dict['gender']}"
+            f"Gender: {user_dict['gender']}\n"
+            f"{course_info}\n"
+            f"{branch_info}"
         )
         await send_sms(user_dict["phone"], sms_message)
         
@@ -111,9 +143,13 @@ class AuthController:
             "id": user["id"],
             "email": user["email"],
             "role": user["role"],
+            "first_name": user.get("first_name"),
+            "last_name": user.get("last_name"),
             "full_name": user["full_name"],
             "date_of_birth": user.get("date_of_birth"),
-            "gender": user.get("gender")
+            "gender": user.get("gender"),
+            "course": user.get("course"),  # Return nested course object directly
+            "branch": user.get("branch")   # Return nested branch object directly
         }}
 
     @staticmethod

@@ -91,19 +91,28 @@ When creating or updating users, use these exact role values:
 **Request Body**:
 ```json
 {
-  "email": "student@example.com",
-  "phone": "+1234567890",
-  "full_name": "John Doe",
+  "email": "pittisunilkumar3@gmail.com",
+  "phone": "+9876543210",
+  "first_name": "John",
+  "last_name": "Doe",
   "role": "student",
-  "branch_id": "branch-uuid",
-  "password": "optional-password",
+  "password": "Neelarani@10",
   "date_of_birth": "2005-08-15",
   "gender": "male",
-  "biometric_id": "optional-fingerprint-id"
+  "biometric_id": "optional-fingerprint-id",
+  "course": {
+    "category_id": "category-uuid",
+    "course_id": "course-uuid",
+    "duration": "6-months"
+  },
+  "branch": {
+    "location_id": "location-uuid",
+    "branch_id": "branch-uuid"
+  }
 }
 ```
-**Required Fields**: `email`, `phone`, `full_name`, `role`
-**Optional Fields**: `branch_id`, `password`, `date_of_birth`, `gender`, `biometric_id`
+**Required Fields**: `email`, `phone`, `first_name`, `last_name`, `role`
+**Optional Fields**: `password`, `date_of_birth`, `gender`, `biometric_id`, `course`, `branch`
 **Response**:
 ```json
 {
@@ -115,7 +124,11 @@ When creating or updating users, use these exact role values:
 - If `password` is not provided, a random password will be generated
 - `date_of_birth` should be in YYYY-MM-DD format (e.g., "2005-08-15")
 - `gender` accepts any string value
+- `course` object is optional but if provided, all nested fields are required
+- `branch` object is optional but if provided, all nested fields are required
 - SMS with login credentials will be sent to the provided phone number
+
+
 
 ### POST /api/auth/login
 **Description**: User login
@@ -137,13 +150,24 @@ When creating or updating users, use these exact role values:
     "id": "1e22ab99-b6ab-4cf1-9bc5-95cd3d62da21",
     "email": "user@example.com",
     "role": "student",
+    "first_name": "John",
+    "last_name": "Doe",
     "full_name": "John Doe",
     "date_of_birth": "2005-08-15",
-    "gender": "male"
+    "gender": "male",
+    "course": {
+      "category_id": "category-uuid",
+      "course_id": "course-uuid",
+      "duration": "6-months"
+    },
+    "branch": {
+      "location_id": "location-uuid", 
+      "branch_id": "branch-uuid"
+    }
   }
 }
 ```
-**Note**: `date_of_birth` and `gender` will be `null` if not provided during registration.
+**Note**: `date_of_birth`, `gender`, `course`, and `branch` will be `null` if not provided during registration.
 
 ### GET /api/auth/me
 **Description**: Get current user information
@@ -158,6 +182,8 @@ Authorization: Bearer <your_jwt_token>
   "id": "0b44cebf-f0e1-4716-b521-0e3ba290e5c4",
   "email": "user@example.com",
   "phone": "+1234567890",
+  "first_name": "John",
+  "last_name": "Doe",
   "full_name": "John Doe",
   "role": "student",
   "branch_id": "branch-uuid",
@@ -165,11 +191,15 @@ Authorization: Bearer <your_jwt_token>
   "is_active": true,
   "date_of_birth": "2005-08-15",
   "gender": "male",
+  "course_category_id": "category-uuid",
+  "course_id": "course-uuid",
+  "course_duration": "6-months",
+  "location_id": "location-uuid",
   "created_at": "2025-01-07T12:00:00Z",
   "updated_at": "2025-01-07T12:00:00Z"
 }
 ```
-**Note**: `date_of_birth`, `gender`, `branch_id`, and `biometric_id` may be `null` if not set.
+**Note**: `date_of_birth`, `gender`, `branch_id`, `biometric_id`, and course-related fields may be `null` if not set.
 
 ### PUT /api/auth/profile
 **Description**: Update user profile
@@ -183,7 +213,8 @@ Authorization: Bearer <your_jwt_token>
 {
   "email": "newemail@example.com",
   "phone": "+0987654321",
-  "full_name": "Jane Doe",
+  "first_name": "Jane",
+  "last_name": "Smith",
   "biometric_id": "fingerprint_456",
   "date_of_birth": "1990-01-01",
   "gender": "female"
