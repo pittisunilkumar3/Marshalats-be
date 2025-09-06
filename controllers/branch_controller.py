@@ -13,9 +13,12 @@ class BranchController:
     @staticmethod
     async def create_branch(
         branch_data: BranchCreate,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN]))
+        current_user: dict = None
     ):
         """Create new branch with comprehensive nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
         branch = Branch(**branch_data.dict())
         
@@ -29,9 +32,12 @@ class BranchController:
     async def get_branches(
         skip: int = 0,
         limit: int = 50,
-        current_user: dict = Depends(get_current_active_user)
+        current_user: dict = None
     ):
         """Get all branches with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
         branches = await db.branches.find({"is_active": True}).skip(skip).limit(limit).to_list(length=limit)
         # Return branches with the nested structure intact
@@ -40,9 +46,12 @@ class BranchController:
     @staticmethod
     async def get_branch(
         branch_id: str,
-        current_user: dict = Depends(get_current_active_user)
+        current_user: dict = None
     ):
         """Get branch by ID with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
         branch = await db.branches.find_one({"id": branch_id})
         if not branch:
@@ -54,12 +63,23 @@ class BranchController:
     async def update_branch(
         branch_id: str,
         branch_update: BranchUpdate,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Update branch with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+        
         # Coach Admin permission check
-        if current_user["role"] == UserRole.COACH_ADMIN:
+        if current_role == UserRole.COACH_ADMIN:
             # For nested structure, check if user is admin of this branch
             existing_branch = await db.branches.find_one({"id": branch_id})
             if not existing_branch:
@@ -97,11 +117,22 @@ class BranchController:
     async def create_holiday(
         branch_id: str,
         holiday_data: HolidayCreate,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Create a new holiday for a branch."""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+        
         db = get_db()
-        if current_user["role"] == UserRole.COACH_ADMIN and current_user.get("branch_id") != branch_id:
+        if current_role == UserRole.COACH_ADMIN and current_user.get("branch_id") != branch_id:
             raise HTTPException(status_code=403, detail="You can only add holidays to your own branch.")
 
         holiday = Holiday(
@@ -118,9 +149,12 @@ class BranchController:
     @staticmethod
     async def get_holidays(
         branch_id: str,
-        current_user: dict = Depends(get_current_active_user)
+        current_user: dict = None
     ):
         """Get all holidays for a specific branch."""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
         holidays = await db.holidays.find({"branch_id": branch_id}).to_list(1000)
         return {"holidays": serialize_doc(holidays)}
@@ -129,9 +163,12 @@ class BranchController:
     async def delete_holiday(
         branch_id: str,
         holiday_id: str,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Delete a holiday for a branch."""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         db = get_db()
         if current_user["role"] == UserRole.COACH_ADMIN and current_user.get("branch_id") != branch_id:
             raise HTTPException(status_code=403, detail="You can only delete holidays from your own branch.")

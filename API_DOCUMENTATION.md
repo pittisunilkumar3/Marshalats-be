@@ -1949,10 +1949,11 @@ GET /api/users?role=student&branch_id=branch-123&skip=0&limit=10
 **Description**: Create new branch with comprehensive nested structure
 
 **Access**: Super Admin only
+**Authentication**: Bearer Token (Superadmin token from either `/api/superadmin/login` or regular admin login)
 
 **Headers**:
 ```
-Authorization: Bearer <your_jwt_token>
+Authorization: Bearer <superadmin_token>
 Content-Type: application/json
 ```
 
