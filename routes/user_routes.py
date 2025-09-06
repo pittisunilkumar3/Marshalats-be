@@ -3,6 +3,7 @@ from typing import Optional
 from controllers.user_controller import UserController
 from models.user_models import UserCreate, UserUpdate, UserRole
 from utils.auth import require_role
+from utils.unified_auth import require_role_unified
 
 router = APIRouter()
 
@@ -20,8 +21,9 @@ async def get_users(
     branch_id: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
-    current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
 ):
+    """Get users with filtering - accessible by Super Admin, Coach Admin, and Coach"""
     return await UserController.get_users(role, branch_id, skip, limit, current_user)
 
 @router.put("/{user_id}")

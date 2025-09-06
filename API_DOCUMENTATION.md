@@ -1835,13 +1835,34 @@ Content-Type: application/json
 ```
 
 ### GET /api/users
-**Description**: Get users with filtering
-**Access**: Super Admin, Coach Admin
+**Description**: Get users with filtering and role-based access control
+**Access**: Super Admin, Coach Admin, Coach
+**Authentication**: Bearer Token (Superadmin, Coach Admin, or Coach)
+
+**Access Rules**:
+- **Super Admin**: Can view all users across all branches
+- **Coach Admin**: Can view all users within their assigned branch only
+- **Coach**: Can view only students within their assigned branch
+
 **Query Parameters**:
-- `role`: Filter by user role
-- `branch_id`: Filter by branch
-- `skip`: Skip records (pagination)
-- `limit`: Limit records (default: 50)
+- `role`: Filter by user role (optional)
+  - Values: `student`, `coach`, `coach_admin`, `super_admin`
+  - Note: Coaches can only filter by `student` role
+- `branch_id`: Filter by branch (optional)
+  - Coach Admin/Coach: Must match their assigned branch
+- `skip`: Skip records for pagination (default: 0)
+- `limit`: Limit records per page (default: 50, max: 100)
+
+**Headers**:
+```
+Authorization: Bearer <superadmin_token|coach_admin_token|coach_token>
+Content-Type: application/json
+```
+
+**Example Request**:
+```bash
+GET /api/users?role=student&branch_id=branch-123&skip=0&limit=10
+```
 
 **Response**:
 ```json
@@ -1849,17 +1870,30 @@ Content-Type: application/json
   "users": [
     {
       "id": "user-uuid",
-      "email": "user@example.com",
-      "full_name": "User Name",
+      "email": "student@example.com",
+      "full_name": "John Student",
       "role": "student",
+      "branch_id": "branch-123",
       "is_active": true,
-      "date_of_birth": "1990-01-01",
-      "gender": "female"
+      "date_of_birth": "2000-01-01",
+      "gender": "male",
+      "phone": "+1234567890",
+      "biometric_id": "fingerprint_123",
+      "created_at": "2025-01-01T10:00:00Z",
+      "updated_at": "2025-01-01T10:00:00Z"
     }
   ],
-  "total": 1
+  "total": 1,
+  "skip": 0,
+  "limit": 10,
+  "message": "Retrieved 1 users"
 }
 ```
+
+**Error Responses**:
+- **401 Unauthorized**: Invalid or missing token
+- **403 Forbidden**: Insufficient permissions for requested data
+- **400 Bad Request**: Invalid query parameters
 
 ### PUT /api/users/{user_id}
 **Description**: Update user. Coach Admins can only update students in their own branch.

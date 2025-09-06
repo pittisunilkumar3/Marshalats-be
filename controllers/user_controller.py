@@ -6,7 +6,8 @@ import uuid
 
 from models.user_models import UserCreate, UserUpdate, BaseUser, UserRole
 from utils.auth import hash_password, require_role, get_current_active_user
-from utils.database import db, get_db
+from utils.unified_auth import require_role_unified
+from utils.database import get_db
 from utils.helpers import serialize_doc, log_activity, send_sms, send_whatsapp
 
 class UserController:
@@ -14,11 +15,22 @@ class UserController:
     async def create_user(
         user_data: UserCreate,
         request: Request,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Create new user (Super Admin or Coach Admin)"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+        
         # If a coach admin is creating a user, they must be in the same branch
-        if current_user["role"] == UserRole.COACH_ADMIN:
+        if current_role == UserRole.COACH_ADMIN:
             if not current_user.get("branch_id") or user_data.branch_id != current_user["branch_id"]:
                 raise HTTPException(status_code=403, detail="Coach Admins can only create users for their own branch.")
             # Coach admins cannot create other admins
@@ -26,6 +38,7 @@ class UserController:
                 raise HTTPException(status_code=403, detail="Coach Admins cannot create other admin users.")
 
         # Check if user exists
+        db = get_db()
         existing_user = await db.users.find_one({
             "$or": [{"email": user_data.email}, {"phone": user_data.phone}]
         })
@@ -47,7 +60,7 @@ class UserController:
         if user_data.gender:
             user_dict["gender"] = user_data.gender
 
-        await db.users.insert_one(user_dict)
+        await get_db().users.insert_one(user_dict)
         
         # Send credentials
         await send_sms(user.phone, f"Account created. Email: {user.email}, Password: {user_data.password}")
@@ -68,36 +81,88 @@ class UserController:
         branch_id: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
-        """Get users with filtering"""
+        """Get users with filtering - accessible by Super Admin, Coach Admin, and Coach"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
         filter_query = {}
+        
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+        
+        # Apply role-based filtering
+        if current_role == UserRole.COACH_ADMIN:
+            # Coach admins can only see users in their branch
+            if current_user.get("branch_id"):
+                filter_query["branch_id"] = current_user["branch_id"]
+        elif current_role == UserRole.COACH:
+            # Coaches can only see students in their branch
+            if current_user.get("branch_id"):
+                filter_query["branch_id"] = current_user["branch_id"]
+            filter_query["role"] = UserRole.STUDENT.value  # Only show students to coaches
+        
+        # Apply additional filters
         if role:
+            # Only allow if current user has permission to see this role
+            if current_role == UserRole.COACH and role != UserRole.STUDENT:
+                raise HTTPException(status_code=403, detail="Coaches can only view student users")
             filter_query["role"] = role.value
+            
         if branch_id:
+            # Ensure user can only filter by their own branch if not super admin
+            if current_role in [UserRole.COACH_ADMIN, UserRole.COACH]:
+                if current_user.get("branch_id") != branch_id:
+                    raise HTTPException(status_code=403, detail="You can only view users from your own branch")
             filter_query["branch_id"] = branch_id
         
+        db = get_db()
         users = await db.users.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
+        total_count = await db.users.count_documents(filter_query)
+        
         for user in users:
             user.pop("password", None)
             user["date_of_birth"] = user.get("date_of_birth")
             user["gender"] = user.get("gender")
         
-        return {"users": serialize_doc(users), "total": len(users)}
+        return {
+            "users": serialize_doc(users), 
+            "total": total_count,
+            "skip": skip,
+            "limit": limit,
+            "message": f"Retrieved {len(users)} users"
+        }
 
     @staticmethod
     async def update_user(
         user_id: str,
         user_update: UserUpdate,
         request: Request,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Update user (Super Admin or Coach Admin)"""
-        target_user = await db.users.find_one({"id": user_id})
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
+        target_user = await get_db().users.find_one({"id": user_id})
         if not target_user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if current_user["role"] == UserRole.COACH_ADMIN:
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+
+        if current_role == UserRole.COACH_ADMIN:
             # Coach Admins can only update students in their own branch
             if target_user["role"] != UserRole.STUDENT.value:
                 raise HTTPException(status_code=403, detail="Coach Admins can only update student profiles.")
@@ -116,7 +181,7 @@ class UserController:
 
         update_data["updated_at"] = datetime.utcnow()
         
-        result = await db.users.update_one(
+        result = await get_db().users.update_one(
             {"id": user_id},
             {"$set": update_data}
         )
@@ -139,15 +204,26 @@ class UserController:
     async def force_password_reset(
         user_id: str,
         request: Request,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Force a password reset for a user (Admins only)."""
-        target_user = await db.users.find_one({"id": user_id})
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
+        target_user = await get_db().users.find_one({"id": user_id})
         if not target_user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+
         # Check permissions
-        if current_user["role"] == UserRole.COACH_ADMIN:
+        if current_role == UserRole.COACH_ADMIN:
             if target_user.get("branch_id") != current_user.get("branch_id"):
                 raise HTTPException(status_code=403, detail="Coach Admins can only reset passwords for users in their own branch.")
             if target_user.get("role") not in [UserRole.STUDENT.value, UserRole.COACH.value]:
@@ -158,7 +234,7 @@ class UserController:
         hashed_password = hash_password(new_password)
 
         # Update the user's password in the database
-        await db.users.update_one(
+        await get_db().users.update_one(
             {"id": user_id},
             {"$set": {"password": hashed_password, "updated_at": datetime.utcnow()}}
         )
@@ -183,10 +259,13 @@ class UserController:
     async def deactivate_user(
         user_id: str,
         request: Request,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN]))
+        current_user: dict = None
     ):
         """Deactivate user (Super Admin only)"""
-        result = await db.users.update_one(
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+            
+        result = await get_db().users.update_one(
             {"id": user_id},
             {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
         )

@@ -39,7 +39,7 @@ async def get_coaches(
     limit: int = Query(50, ge=1, le=100, description="Number of coaches to return"),
     active_only: bool = Query(True, description="Filter only active coaches"),
     area_of_expertise: Optional[str] = Query(None, description="Filter by area of expertise"),
-    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
 ):
     """Get coaches with filtering options"""
     return await CoachController.get_coaches(skip, limit, active_only, area_of_expertise)
@@ -47,7 +47,7 @@ async def get_coaches(
 @router.get("/{coach_id}")
 async def get_coach_by_id(
     coach_id: str,
-    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
 ):
     """Get coach by ID"""
     return await CoachController.get_coach_by_id(coach_id)
