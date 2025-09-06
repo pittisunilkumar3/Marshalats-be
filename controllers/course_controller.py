@@ -12,15 +12,18 @@ class CourseController:
     @staticmethod
     async def create_course(
         course_data: CourseCreate,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN]))
+        current_user: dict = None
     ):
         """Create new course with comprehensive nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         db = get_db()
         course = Course(**course_data.dict())
-        
+
         # Store the course with nested structure exactly as provided
         course_dict = course.dict()
-        
+
         await db.courses.insert_one(course_dict)
         return {"message": "Course created successfully", "course_id": course.id}
 
@@ -32,9 +35,12 @@ class CourseController:
         active_only: bool = True,
         skip: int = 0,
         limit: int = 50,
-        current_user: dict = Depends(get_current_active_user)
+        current_user: dict = None
     ):
         """Get courses with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         db = get_db()
         filter_query = {}
         
@@ -53,9 +59,12 @@ class CourseController:
     @staticmethod
     async def get_course(
         course_id: str,
-        current_user: dict = Depends(get_current_active_user)
+        current_user: dict = None
     ):
         """Get course by ID with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         db = get_db()
         course = await db.courses.find_one({"id": course_id})
         if not course:
@@ -66,9 +75,12 @@ class CourseController:
     async def update_course(
         course_id: str,
         course_update: CourseUpdate,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Update course with nested structure"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         db = get_db()
         
         # Check if course exists
@@ -101,9 +113,12 @@ class CourseController:
     @staticmethod
     async def get_course_stats(
         course_id: str,
-        current_user: dict = Depends(require_role([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+        current_user: dict = None
     ):
         """Get statistics for a specific course."""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
         db = get_db()
         course = await db.courses.find_one({"id": course_id})
         if not course:
@@ -116,3 +131,30 @@ class CourseController:
             "active_enrollments": active_enrollments
         }
         return stats
+
+    @staticmethod
+    async def delete_course(
+        course_id: str,
+        current_user: dict = None
+    ):
+        """Delete course (soft delete by setting active to False)"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Check if course exists
+        existing_course = await db.courses.find_one({"id": course_id})
+        if not existing_course:
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        # Soft delete by setting settings.active to False
+        result = await db.courses.update_one(
+            {"id": course_id},
+            {"$set": {"settings.active": False, "updated_at": datetime.utcnow()}}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Course not found")
+
+        return {"message": "Course deleted successfully"}

@@ -177,3 +177,30 @@ class BranchController:
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Holiday not found")
         return
+
+    @staticmethod
+    async def delete_branch(
+        branch_id: str,
+        current_user: dict = None
+    ):
+        """Delete branch (soft delete by setting is_active to False)"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Check if branch exists
+        existing_branch = await db.branches.find_one({"id": branch_id})
+        if not existing_branch:
+            raise HTTPException(status_code=404, detail="Branch not found")
+
+        # Soft delete by setting is_active to False
+        result = await db.branches.update_one(
+            {"id": branch_id},
+            {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Branch not found")
+
+        return {"message": "Branch deleted successfully"}

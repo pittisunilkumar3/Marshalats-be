@@ -9,15 +9,15 @@ BASE_URL = "http://localhost:8001/api"
 def get_token():
     """Get authentication token"""
     login_data = {
-        "email": "superadmin@test.com",
-        "password": "SuperAdmin123!"
+        "email": "superadmin@example.com",
+        "password": "StrongPassword@123"
     }
-    
+
     print("🔐 Logging in as super admin...")
-    response = requests.post(f"{BASE_URL}/auth/login", json=login_data)
-    
+    response = requests.post(f"{BASE_URL}/superadmin/login", json=login_data)
+
     if response.status_code == 200:
-        token = response.json()["access_token"]
+        token = response.json()["data"]["token"]
         print("✅ Login successful!")
         return token
     else:

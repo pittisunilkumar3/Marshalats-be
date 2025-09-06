@@ -4,10 +4,16 @@ from passlib.context import CryptContext
 import jwt
 import os
 from typing import Optional
+from dotenv import load_dotenv
+from pathlib import Path
 
 from models.superadmin_models import SuperAdmin, SuperAdminRegister, SuperAdminLogin, SuperAdminResponse
 from utils.database import get_db
 from utils.helpers import serialize_doc
+
+# Load environment variables
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env')
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

@@ -4,7 +4,7 @@ from models.branch_models import BranchCreate, BranchUpdate
 from models.holiday_models import HolidayCreate
 from models.user_models import UserRole
 from utils.auth import require_role, get_current_active_user
-from utils.unified_auth import require_role_unified
+from utils.unified_auth import require_role_unified, get_current_user_or_superadmin
 
 router = APIRouter()
 
@@ -20,14 +20,14 @@ async def create_branch(
 async def get_branches(
     skip: int = 0,
     limit: int = 50,
-    current_user: dict = Depends(get_current_active_user)
+    current_user: dict = Depends(get_current_user_or_superadmin)
 ):
     return await BranchController.get_branches(skip, limit, current_user)
 
 @router.get("/{branch_id}")
 async def get_branch(
     branch_id: str,
-    current_user: dict = Depends(get_current_active_user)
+    current_user: dict = Depends(get_current_user_or_superadmin)
 ):
     return await BranchController.get_branch(branch_id, current_user)
 
@@ -49,10 +49,18 @@ async def create_holiday(
     """Create holiday for branch - accessible by Super Admin and Coach Admin with unified tokens"""
     return await BranchController.create_holiday(branch_id, holiday_data, current_user)
 
+@router.delete("/{branch_id}")
+async def delete_branch(
+    branch_id: str,
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN]))
+):
+    """Delete branch - accessible by Super Admin only"""
+    return await BranchController.delete_branch(branch_id, current_user)
+
 @router.get("/{branch_id}/holidays")
 async def get_holidays(
     branch_id: str,
-    current_user: dict = Depends(get_current_active_user)
+    current_user: dict = Depends(get_current_user_or_superadmin)
 ):
     return await BranchController.get_holidays(branch_id, current_user)
 

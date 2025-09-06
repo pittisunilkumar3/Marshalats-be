@@ -3,10 +3,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List
 import jwt
 import os
+from dotenv import load_dotenv
+from pathlib import Path
 
 from models.user_models import UserRole
 from utils.database import get_db
 from utils.helpers import serialize_doc
+
+# Load environment variables
+ROOT_DIR = Path(__file__).parent.parent
+load_dotenv(ROOT_DIR / '.env')
 
 security = HTTPBearer()
 SECRET_KEY = os.environ.get('SECRET_KEY', 'student_management_secret_key_2025')
@@ -21,10 +27,10 @@ async def get_current_user_or_superadmin(credentials: HTTPAuthorizationCredentia
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         user_role: str = payload.get("role")
-        
+
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
+
         # Check if it's a superadmin token
         if user_role == "superadmin":
             user = await db.superadmins.find_one({"id": user_id})
