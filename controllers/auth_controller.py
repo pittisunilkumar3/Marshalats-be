@@ -129,7 +129,7 @@ class AuthController:
             )
             raise HTTPException(status_code=400, detail="Account is deactivated")
         
-        access_token = create_access_token(data={"sub": user["id"]})
+        access_token = create_access_token(data={"sub": user["id"], "role": user["role"]})
 
         await log_activity(
             request=request,
