@@ -1,12 +1,12 @@
 from fastapi import HTTPException, Depends, Request
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 import secrets
 import uuid
 
 from models.user_models import UserCreate, UserUpdate, BaseUser, UserRole
 from utils.auth import hash_password, require_role, get_current_active_user
-from utils.unified_auth import require_role_unified
+from utils.unified_auth import require_role_unified, get_current_user_or_superadmin
 from utils.database import get_db
 from utils.helpers import serialize_doc, log_activity, send_sms, send_whatsapp
 
@@ -264,15 +264,15 @@ class UserController:
         """Deactivate user (Super Admin only)"""
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
-            
+
         result = await get_db().users.update_one(
             {"id": user_id},
             {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
         )
-        
+
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="User not found")
-        
+
         await log_activity(
             request=request,
             action="admin_deactivate_user",
@@ -282,3 +282,151 @@ class UserController:
         )
 
         return {"message": "User deactivated successfully"}
+
+    @staticmethod
+    async def delete_user(
+        user_id: str,
+        request: Request,
+        current_user: dict = None
+    ):
+        """Permanently delete user (Super Admin only)"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Check if user exists
+        user = await get_db().users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Don't allow deletion of super admin users
+        if user.get("role") == "super_admin":
+            raise HTTPException(status_code=403, detail="Cannot delete super admin users")
+
+        # Delete user from database
+        result = await get_db().users.delete_one({"id": user_id})
+
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Log the deletion activity
+        await log_activity(
+            request=request,
+            action="admin_delete_user",
+            user_id=current_user["id"],
+            user_name=current_user["full_name"],
+            details={"deleted_user_id": user_id, "deleted_user_email": user.get("email", "N/A")}
+        )
+
+        return {"message": "User deleted successfully"}
+
+    @staticmethod
+    async def get_student_details(
+        current_user: dict = Depends(get_current_user_or_superadmin)
+    ):
+        """Get detailed student information with course enrollment data (Authenticated endpoint)"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Build query based on user role
+        query = {"role": "student", "is_active": True}
+
+        # Role-based access control
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+
+        # Apply branch filtering for non-super-admin users
+        if current_role != UserRole.SUPER_ADMIN:
+            user_branch_id = current_user.get("branch_id")
+            if not user_branch_id:
+                raise HTTPException(status_code=403, detail="User not assigned to any branch")
+            query["branch_id"] = user_branch_id
+
+        # Get students
+        students_cursor = db.users.find(query)
+        students = await students_cursor.to_list(1000)
+
+        if not students:
+            return {
+                "message": "No students found",
+                "students": [],
+                "total": 0
+            }
+
+        # Enrich student data with course and enrollment information
+        enriched_students = []
+
+        for student in students:
+            student_id = student["id"]
+
+            # Calculate age from date_of_birth
+            age = None
+            if student.get("date_of_birth"):
+                if isinstance(student["date_of_birth"], str):
+                    try:
+                        birth_date = datetime.strptime(student["date_of_birth"], "%Y-%m-%d").date()
+                    except ValueError:
+                        birth_date = None
+                elif isinstance(student["date_of_birth"], date):
+                    birth_date = student["date_of_birth"]
+                else:
+                    birth_date = None
+
+                if birth_date:
+                    today = date.today()
+                    age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+            # Get enrollments for this student
+            enrollments = await db.enrollments.find({"student_id": student_id, "is_active": True}).to_list(100)
+
+            # Get course details for each enrollment
+            courses_info = []
+            for enrollment in enrollments:
+                course = await db.courses.find_one({"id": enrollment["course_id"]})
+                if course:
+                    # Calculate duration from enrollment dates
+                    duration_days = None
+                    if enrollment.get("start_date") and enrollment.get("end_date"):
+                        start_date = enrollment["start_date"]
+                        end_date = enrollment["end_date"]
+                        if isinstance(start_date, str):
+                            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                        if isinstance(end_date, str):
+                            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                        duration_days = (end_date - start_date).days
+
+                    # Determine level from course difficulty
+                    level = course.get("difficulty_level", "Beginner")
+
+                    courses_info.append({
+                        "course_name": course.get("title", "Unknown Course"),
+                        "level": level,
+                        "duration": f"{duration_days} days" if duration_days else "Not specified",
+                        "enrollment_date": enrollment.get("enrollment_date"),
+                        "payment_status": enrollment.get("payment_status", "pending")
+                    })
+
+            # Prepare student details response
+            student_details = {
+                "student_id": student_id,
+                "student_name": student.get("full_name", f"{student.get('first_name', '')} {student.get('last_name', '')}").strip(),
+                "gender": student.get("gender", "Not specified"),
+                "age": age,
+                "courses": courses_info,
+                "email": student.get("email"),
+                "phone": student.get("phone"),
+                "action": "view_profile"  # Default action - can be customized based on requirements
+            }
+
+            enriched_students.append(student_details)
+
+        return {
+            "message": f"Retrieved {len(enriched_students)} student details successfully",
+            "students": enriched_students,
+            "total": len(enriched_students)
+        }

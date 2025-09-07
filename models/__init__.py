@@ -4,6 +4,9 @@
 from .user_models import UserRole, BaseUser, UserCreate, UserLogin, ForgotPassword, ResetPassword, UserUpdate
 from .branch_models import Branch, BranchCreate, BranchUpdate
 from .course_models import Course, CourseCreate, CourseUpdate
+from .category_models import Category, CategoryCreate, CategoryUpdate, CategoryResponse
+from .duration_models import Duration, DurationCreate, DurationUpdate, DurationResponse
+from .location_models import Location, LocationCreate, LocationUpdate, LocationWithBranches, LocationResponse
 from .enrollment_models import PaymentStatus, Enrollment, EnrollmentCreate
 from .payment_models import Payment, PaymentProof, PaymentCreate
 from .attendance_models import AttendanceMethod, Attendance, AttendanceCreate, BiometricAttendance
@@ -29,6 +32,15 @@ __all__ = [
     
     # Course models
     'Course', 'CourseCreate', 'CourseUpdate',
+
+    # Category models
+    'Category', 'CategoryCreate', 'CategoryUpdate', 'CategoryResponse',
+
+    # Duration models
+    'Duration', 'DurationCreate', 'DurationUpdate', 'DurationResponse',
+
+    # Location models
+    'Location', 'LocationCreate', 'LocationUpdate', 'LocationWithBranches', 'LocationResponse',
     
     # Enrollment models
     'PaymentStatus', 'Enrollment', 'EnrollmentCreate',

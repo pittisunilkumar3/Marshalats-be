@@ -158,3 +158,306 @@ class CourseController:
             raise HTTPException(status_code=404, detail="Course not found")
 
         return {"message": "Course deleted successfully"}
+
+    @staticmethod
+    async def get_public_courses(
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 100
+    ):
+        """Get all courses - Public endpoint (no authentication required)"""
+        db = get_db()
+
+        # Build query
+        query = {}
+        if active_only:
+            query["settings.active"] = True
+
+        # Apply pagination
+        if limit > 100:
+            limit = 100  # Cap at 100 for public endpoint
+
+        # Get courses
+        courses_cursor = db.courses.find(query).skip(skip).limit(limit)
+        courses = await courses_cursor.to_list(limit)
+
+        # Get total count
+        total = await db.courses.count_documents(query)
+
+        # Format courses for public consumption
+        public_courses = []
+        for course in courses:
+            public_course = {
+                "id": course.get("id"),
+                "title": course.get("title"),
+                "code": course.get("code"),
+                "description": course.get("description"),
+                "difficulty_level": course.get("difficulty_level"),
+                "category_id": course.get("category_id"),
+                "pricing": {
+                    "currency": course.get("pricing", {}).get("currency", "INR"),
+                    "amount": course.get("pricing", {}).get("amount", 0)
+                },
+                "student_requirements": {
+                    "max_students": course.get("student_requirements", {}).get("max_students", 0),
+                    "min_age": course.get("student_requirements", {}).get("min_age", 0),
+                    "max_age": course.get("student_requirements", {}).get("max_age", 100),
+                    "prerequisites": course.get("student_requirements", {}).get("prerequisites", [])
+                },
+                "offers_certification": course.get("settings", {}).get("offers_certification", False),
+                "media_resources": {
+                    "course_image_url": course.get("media_resources", {}).get("course_image_url"),
+                    "promo_video_url": course.get("media_resources", {}).get("promo_video_url")
+                },
+                "created_at": course.get("created_at")
+            }
+            public_courses.append(public_course)
+
+        return {
+            "message": f"Retrieved {len(public_courses)} courses successfully",
+            "courses": public_courses,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+
+    @staticmethod
+    async def get_courses_by_category(
+        category_id: str,
+        difficulty_level: Optional[str] = None,
+        active_only: bool = True,
+        include_durations: bool = True,
+        skip: int = 0,
+        limit: int = 50
+    ):
+        """Get all courses filtered by category - Public endpoint"""
+        db = get_db()
+
+        # Verify category exists
+        category = await db.categories.find_one({"id": category_id})
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+
+        # Build query
+        query = {"category_id": category_id}
+        if difficulty_level:
+            query["difficulty_level"] = difficulty_level
+        if active_only:
+            query["settings.active"] = True
+
+        # Apply pagination
+        if limit > 100:
+            limit = 100
+
+        # Get courses
+        courses_cursor = db.courses.find(query).skip(skip).limit(limit)
+        courses = await courses_cursor.to_list(limit)
+
+        # Get total count
+        total = await db.courses.count_documents(query)
+
+        # Enrich courses with additional data
+        enriched_courses = []
+        for course in courses:
+            # Get available durations
+            available_durations = []
+            if include_durations:
+                durations = await db.durations.find({"is_active": True}).sort("display_order", 1).to_list(100)
+                base_price = course.get("pricing", {}).get("amount", 0)
+
+                for duration in durations:
+                    multiplier = duration.get("pricing_multiplier", 1.0)
+                    duration_data = {
+                        "id": duration["id"],
+                        "name": duration["name"],
+                        "code": duration["code"],
+                        "duration_months": duration["duration_months"],
+                        "pricing_multiplier": multiplier
+                    }
+                    available_durations.append(duration_data)
+
+            # Get locations where this course is offered
+            branches = await db.branches.find({
+                "assignments.courses": course["id"],
+                "is_active": True
+            }).to_list(100)
+
+            location_map = {}
+            for branch in branches:
+                city = branch["branch"]["address"]["city"]
+                if city not in location_map:
+                    # Try to find location record
+                    location = await db.locations.find_one({
+                        "name": {"$regex": city, "$options": "i"},
+                        "is_active": True
+                    })
+                    location_map[city] = {
+                        "location_id": location["id"] if location else None,
+                        "location_name": location["name"] if location else city,
+                        "branch_count": 1
+                    }
+                else:
+                    location_map[city]["branch_count"] += 1
+
+            course_data = {
+                "id": course["id"],
+                "title": course["title"],
+                "code": course["code"],
+                "description": course["description"],
+                "difficulty_level": course["difficulty_level"],
+                "pricing": {
+                    "currency": course.get("pricing", {}).get("currency", "INR"),
+                    "amount": course.get("pricing", {}).get("amount", 0)
+                },
+                "student_requirements": course.get("student_requirements", {}),
+                "available_durations": available_durations,
+                "locations_offered": list(location_map.values())
+            }
+            enriched_courses.append(course_data)
+
+        return {
+            "message": f"Retrieved {len(enriched_courses)} courses for category successfully",
+            "category": {
+                "id": category["id"],
+                "name": category["name"],
+                "code": category["code"]
+            },
+            "courses": enriched_courses,
+            "total": total
+        }
+
+    @staticmethod
+    async def get_courses_by_location(
+        location_id: str,
+        category_id: Optional[str] = None,
+        difficulty_level: Optional[str] = None,
+        include_durations: bool = True,
+        include_branches: bool = False,
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 50
+    ):
+        """Get courses available at a specific location - Public endpoint"""
+        db = get_db()
+
+        # Verify location exists
+        location = await db.locations.find_one({"id": location_id})
+        if not location:
+            raise HTTPException(status_code=404, detail="Location not found")
+
+        # Find branches in this location
+        branches = await db.branches.find({
+            "branch.address.city": {"$regex": location["name"], "$options": "i"},
+            "is_active": True
+        }).to_list(100)
+
+        if not branches:
+            return {
+                "message": "No branches found for this location",
+                "location": {
+                    "id": location["id"],
+                    "name": location["name"],
+                    "code": location["code"],
+                    "branch_count": 0
+                },
+                "courses": [],
+                "total": 0
+            }
+
+        # Get all course IDs offered at these branches
+        course_ids = set()
+        branch_course_map = {}
+
+        for branch in branches:
+            branch_courses = branch.get("assignments", {}).get("courses", [])
+            course_ids.update(branch_courses)
+
+            for course_id in branch_courses:
+                if course_id not in branch_course_map:
+                    branch_course_map[course_id] = []
+                branch_course_map[course_id].append({
+                    "id": branch["id"],
+                    "name": branch["branch"]["name"],
+                    "code": branch["branch"]["code"],
+                    "area": branch["branch"]["address"]["area"]
+                })
+
+        # Build course query
+        course_query = {"id": {"$in": list(course_ids)}}
+        if category_id:
+            course_query["category_id"] = category_id
+        if difficulty_level:
+            course_query["difficulty_level"] = difficulty_level
+        if active_only:
+            course_query["settings.active"] = True
+
+        # Apply pagination
+        if limit > 100:
+            limit = 100
+
+        # Get courses
+        courses_cursor = db.courses.find(course_query).skip(skip).limit(limit)
+        courses = await courses_cursor.to_list(limit)
+
+        # Get total count
+        total = await db.courses.count_documents(course_query)
+
+        # Enrich courses with additional data
+        enriched_courses = []
+        for course in courses:
+            # Get category info
+            category = await db.categories.find_one({"id": course["category_id"]})
+
+            # Get available durations
+            available_durations = []
+            if include_durations:
+                durations = await db.durations.find({"is_active": True}).sort("display_order", 1).to_list(100)
+                base_price = course.get("pricing", {}).get("amount", 0)
+
+                for duration in durations:
+                    multiplier = duration.get("pricing_multiplier", 1.0)
+                    final_price = base_price * multiplier
+                    duration_data = {
+                        "id": duration["id"],
+                        "name": duration["name"],
+                        "code": duration["code"],
+                        "final_price": final_price
+                    }
+                    available_durations.append(duration_data)
+
+            # Get branches offering this course
+            branches_offering = []
+            if include_branches:
+                branches_offering = branch_course_map.get(course["id"], [])
+
+            course_data = {
+                "id": course["id"],
+                "title": course["title"],
+                "code": course["code"],
+                "description": course["description"],
+                "category": {
+                    "id": category["id"] if category else None,
+                    "name": category["name"] if category else "Unknown",
+                    "code": category["code"] if category else "UNK"
+                },
+                "difficulty_level": course["difficulty_level"],
+                "pricing": {
+                    "currency": course.get("pricing", {}).get("currency", "INR"),
+                    "amount": course.get("pricing", {}).get("amount", 0)
+                },
+                "available_durations": available_durations,
+                "branches_offering": branches_offering
+            }
+            enriched_courses.append(course_data)
+
+        return {
+            "message": f"Retrieved {len(enriched_courses)} courses for location successfully",
+            "location": {
+                "id": location["id"],
+                "name": location["name"],
+                "code": location["code"],
+                "branch_count": len(branches)
+            },
+            "courses": enriched_courses,
+            "total": total
+        }

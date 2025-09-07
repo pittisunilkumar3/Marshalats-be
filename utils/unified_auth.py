@@ -15,8 +15,12 @@ ROOT_DIR = Path(__file__).parent.parent
 load_dotenv(ROOT_DIR / '.env')
 
 security = HTTPBearer()
+# Use the same SECRET_KEY as the main server
 SECRET_KEY = os.environ.get('SECRET_KEY', 'student_management_secret_key_2025')
 ALGORITHM = "HS256"
+
+# Debug: Print the SECRET_KEY being used (first 20 chars only for security)
+print(f"🔑 unified_auth.py using SECRET_KEY: {SECRET_KEY[:20]}...")
 
 async def get_current_user_or_superadmin(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """

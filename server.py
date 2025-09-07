@@ -13,6 +13,10 @@ from routes import (
     coach_router,
     branch_router,
     course_router,
+    category_router,
+    duration_router,
+    location_router,
+    branch_public_router,
     enrollment_router,
     payment_router,
     request_router,
@@ -68,6 +72,10 @@ app.include_router(user_router, prefix="/users", tags=["Users"])
 app.include_router(coach_router, prefix="/coaches", tags=["Coaches"])
 app.include_router(branch_router, prefix="/branches", tags=["Branches"])
 app.include_router(course_router, prefix="/courses", tags=["Courses"])
+app.include_router(category_router, prefix="/categories", tags=["Categories"])
+app.include_router(duration_router, prefix="/durations", tags=["Durations"])
+app.include_router(location_router, prefix="/locations", tags=["Locations"])
+app.include_router(branch_public_router, prefix="/branches", tags=["Branches Public"])
 app.include_router(enrollment_router, prefix="/enrollments", tags=["Enrollments"])
 app.include_router(payment_router, prefix="/payments", tags=["Payments"])
 app.include_router(request_router, prefix="/requests", tags=["Requests"])

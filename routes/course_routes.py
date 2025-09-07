@@ -56,3 +56,38 @@ async def get_course_stats(
     current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
 ):
     return await CourseController.get_course_stats(course_id, current_user)
+
+@router.get("/public/all")
+async def get_public_courses(
+    active_only: bool = True,
+    skip: int = 0,
+    limit: int = 100
+):
+    """Get all courses - Public endpoint (no authentication required)"""
+    return await CourseController.get_public_courses(active_only, skip, limit)
+
+@router.get("/public/by-category/{category_id}")
+async def get_courses_by_category(
+    category_id: str,
+    difficulty_level: Optional[str] = None,
+    active_only: bool = True,
+    include_durations: bool = True,
+    skip: int = 0,
+    limit: int = 50
+):
+    """Get all courses filtered by category - Public endpoint (no authentication required)"""
+    return await CourseController.get_courses_by_category(category_id, difficulty_level, active_only, include_durations, skip, limit)
+
+@router.get("/public/by-location/{location_id}")
+async def get_courses_by_location(
+    location_id: str,
+    category_id: Optional[str] = None,
+    difficulty_level: Optional[str] = None,
+    include_durations: bool = True,
+    include_branches: bool = False,
+    active_only: bool = True,
+    skip: int = 0,
+    limit: int = 50
+):
+    """Get courses available at a specific location - Public endpoint (no authentication required)"""
+    return await CourseController.get_courses_by_location(location_id, category_id, difficulty_level, include_durations, include_branches, active_only, skip, limit)

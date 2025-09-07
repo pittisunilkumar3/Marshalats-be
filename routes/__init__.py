@@ -5,6 +5,10 @@ from .user_routes import router as user_router
 from .coach_routes import router as coach_router
 from .branch_routes import router as branch_router
 from .course_routes import router as course_router
+from .category_routes import router as category_router
+from .duration_routes import router as duration_router
+from .location_routes import router as location_router
+from .branch_public_routes import router as branch_public_router
 from .enrollment_routes import router as enrollment_router
 from .payment_routes import router as payment_router
 from .request_routes import router as request_router
@@ -16,6 +20,10 @@ __all__ = [
     'coach_router',
     'branch_router',
     'course_router',
+    'category_router',
+    'duration_router',
+    'location_router',
+    'branch_public_router',
     'enrollment_router',
     'payment_router',
     'request_router',
