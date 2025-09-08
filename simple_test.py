@@ -2,7 +2,7 @@
 import requests
 import json
 
-BASE_URL = "http://localhost:8001"
+BASE_URL = "http://localhost:8003"
 
 # Get superadmin token
 admin_login = {"email": "testsuperadmin@example.com", "password": "TestSuperAdmin123!"}

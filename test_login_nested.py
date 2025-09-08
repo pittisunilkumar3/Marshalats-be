@@ -8,7 +8,7 @@ import json
 def test_login_with_nested_structure():
     """Test login and verify nested objects in response"""
     
-    login_url = "http://localhost:8001/api/auth/login"
+    login_url = "http://localhost:8003/api/auth/login"
     
     # Login with the fresh user
     login_data = {

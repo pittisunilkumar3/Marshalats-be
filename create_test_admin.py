@@ -106,7 +106,7 @@ async def create_test_admin():
         
         print(f"\n🧪 Test the token with curl:")
         print("=" * 30)
-        print(f"curl -X GET http://localhost:8001/users \\")
+        print(f"curl -X GET http://localhost:8003/users \\")
         print(f"  -H 'Authorization: Bearer {token}' \\")
         print(f"  -H 'Content-Type: application/json'")
         
