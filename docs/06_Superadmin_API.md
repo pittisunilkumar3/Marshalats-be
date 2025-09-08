@@ -27,7 +27,7 @@ Authorization: Bearer <superadmin_jwt_token>
 
 ## Authentication Endpoints
 
-### POST /api/superadmin/register
+### POST /superadmin/register
 Register a new superadmin (first-time setup or by existing superadmin).
 
 **Authentication:** Not required for first superadmin, required for subsequent registrations

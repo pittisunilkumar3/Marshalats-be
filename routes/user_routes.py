@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Path
 from typing import Optional
 from controllers.user_controller import UserController
 from models.user_models import UserCreate, UserUpdate, UserRole
 from utils.auth import require_role
-from utils.unified_auth import require_role_unified
+from utils.unified_auth import require_role_unified, get_current_user_or_superadmin
 
 router = APIRouter()
 
@@ -25,6 +25,21 @@ async def get_users(
 ):
     """Get users with filtering - accessible by Super Admin, Coach Admin, and Coach"""
     return await UserController.get_users(role, branch_id, skip, limit, current_user)
+
+@router.get("/students/details")
+async def get_student_details(
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
+):
+    """Get detailed student information with course enrollment data (Authenticated endpoint)"""
+    return await UserController.get_student_details(current_user)
+
+@router.get("/{user_id}")
+async def get_user_by_id(
+    user_id: str = Path(..., description="User ID"),
+    current_user: dict = Depends(get_current_user_or_superadmin)
+):
+    """Get single user by ID - accessible by Super Admin, Coach Admin, and Coach"""
+    return await UserController.get_user(user_id, current_user)
 
 @router.put("/{user_id}")
 async def update_user(
@@ -60,10 +75,3 @@ async def deactivate_user(
 ):
     """Deactivate user (soft delete) - accessible by Super Admin only"""
     return await UserController.deactivate_user(user_id, request, current_user)
-
-@router.get("/students/details")
-async def get_student_details(
-    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
-):
-    """Get detailed student information with course enrollment data (Authenticated endpoint)"""
-    return await UserController.get_student_details(current_user)

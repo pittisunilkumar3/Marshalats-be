@@ -1,6 +1,6 @@
 from fastapi import Request
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 from bson import ObjectId
 import logging
 
@@ -21,6 +21,12 @@ def serialize_doc(doc):
                 continue  # Skip MongoDB _id field
             elif isinstance(value, ObjectId):
                 result[key] = str(value)
+            elif isinstance(value, date) and not isinstance(value, datetime):
+                # Convert date objects to ISO format string for BSON compatibility
+                result[key] = value.isoformat()
+            elif isinstance(value, datetime):
+                # Keep datetime objects as-is (BSON can handle them)
+                result[key] = value
             elif isinstance(value, dict):
                 result[key] = serialize_doc(value)
             elif isinstance(value, list):
@@ -28,6 +34,12 @@ def serialize_doc(doc):
             else:
                 result[key] = value
         return result
+    elif isinstance(doc, date) and not isinstance(doc, datetime):
+        # Convert standalone date objects to ISO format string
+        return doc.isoformat()
+    elif isinstance(doc, datetime):
+        # Keep datetime objects as-is
+        return doc
     return doc
 
 async def log_activity(
@@ -40,16 +52,23 @@ async def log_activity(
 ):
     """Helper function to log user activity."""
     db = get_db()
+
+    # Serialize details to handle date objects and other non-BSON types
+    serialized_details = serialize_doc(details) if details else None
+
     log_entry = ActivityLog(
         user_id=user_id,
         user_name=user_name,
         action=action,
-        details=details,
+        details=serialized_details,
         status=status,
         ip_address=request.client.host if request else "N/A",
         timestamp=datetime.utcnow()
     )
-    await db.activity_logs.insert_one(log_entry.dict())
+
+    # Serialize the entire log entry to ensure BSON compatibility
+    log_entry_dict = serialize_doc(log_entry.dict())
+    await db.activity_logs.insert_one(log_entry_dict)
 
 async def send_sms(phone: str, message: str) -> bool:
     """Mock SMS sending - to be replaced with Firebase integration"""

@@ -1,6 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from bson import ObjectId
 from fastapi import Request
+from datetime import date, datetime
 
 # Global database instance
 db: AsyncIOMotorDatabase = None
@@ -31,6 +32,12 @@ def serialize_doc(doc):
                 serialized["id"] = str(value)
             elif isinstance(value, ObjectId):
                 serialized[key] = str(value)
+            elif isinstance(value, date) and not isinstance(value, datetime):
+                # Convert date objects to ISO format string for BSON compatibility
+                serialized[key] = value.isoformat()
+            elif isinstance(value, datetime):
+                # Keep datetime objects as-is (BSON can handle them)
+                serialized[key] = value
             elif isinstance(value, dict):
                 serialized[key] = serialize_doc(value)
             elif isinstance(value, list):
@@ -38,4 +45,10 @@ def serialize_doc(doc):
             else:
                 serialized[key] = value
         return serialized
+    elif isinstance(doc, date) and not isinstance(doc, datetime):
+        # Convert standalone date objects to ISO format string
+        return doc.isoformat()
+    elif isinstance(doc, datetime):
+        # Keep datetime objects as-is
+        return doc
     return doc

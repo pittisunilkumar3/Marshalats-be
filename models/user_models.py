@@ -71,6 +71,10 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
+    # Nested course and branch information (preferred)
+    course: Optional[CourseInfo] = None
+    branch: Optional[BranchInfo] = None
+    # Flat fields for backward compatibility
     course_category_id: Optional[str] = None
     course_id: Optional[str] = None
     course_duration: Optional[str] = None

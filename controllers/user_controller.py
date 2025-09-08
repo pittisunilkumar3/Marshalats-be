@@ -53,12 +53,10 @@ class UserController:
         user = BaseUser(**user_data.dict())
         user_dict = user.dict()
         user_dict["password"] = hashed_password
-        
-        # Ensure date_of_birth and gender are included in the user creation
-        if user_data.date_of_birth:
-            user_dict["date_of_birth"] = user_data.date_of_birth
-        if user_data.gender:
-            user_dict["gender"] = user_data.gender
+
+        # Handle date serialization for MongoDB compatibility
+        if "date_of_birth" in user_dict and isinstance(user_dict["date_of_birth"], date):
+            user_dict["date_of_birth"] = user_dict["date_of_birth"].isoformat()
 
         await get_db().users.insert_one(user_dict)
         
@@ -132,11 +130,50 @@ class UserController:
             user["gender"] = user.get("gender")
         
         return {
-            "users": serialize_doc(users), 
+            "users": serialize_doc(users),
             "total": total_count,
             "skip": skip,
             "limit": limit,
             "message": f"Retrieved {len(users)} users"
+        }
+
+    @staticmethod
+    async def get_user(
+        user_id: str,
+        current_user: dict = None
+    ):
+        """Get single user by ID - accessible by Super Admin, Coach Admin, and Coach"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+        user = await db.users.find_one({"id": user_id})
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get current user role as enum
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+
+        # Role-based access control
+        if current_role in [UserRole.COACH_ADMIN, UserRole.COACH]:
+            # Coach Admin and Coach can only view users from their own branch
+            if current_user.get("branch_id") != user.get("branch_id"):
+                raise HTTPException(status_code=403, detail="You can only view users from your own branch")
+
+        # Remove sensitive information
+        user.pop("password", None)
+        user["date_of_birth"] = user.get("date_of_birth")
+        user["gender"] = user.get("gender")
+
+        return {
+            "user": serialize_doc(user),
+            "message": "User retrieved successfully"
         }
 
     @staticmethod
@@ -169,15 +206,57 @@ class UserController:
             if target_user.get("branch_id") != current_user.get("branch_id"):
                 raise HTTPException(status_code=403, detail="Coach Admins can only update students in their own branch.")
 
-        update_data = {k: v for k, v in user_update.dict(exclude_unset=True).items()}
+        # Convert user_update to dict and handle date serialization
+        update_dict = user_update.dict(exclude_unset=True)
+        update_data = {}
+
+        for k, v in update_dict.items():
+            if k == "date_of_birth" and isinstance(v, date):
+                # Convert date object to ISO string for MongoDB compatibility
+                update_data[k] = v.isoformat()
+            elif k == "course" and v:
+                # Handle nested course object (v could be dict or CourseInfo object)
+                if isinstance(v, dict):
+                    update_data["course"] = v
+                else:
+                    update_data["course"] = {
+                        "category_id": v.category_id,
+                        "course_id": v.course_id,
+                        "duration": v.duration
+                    }
+            elif k == "branch" and v:
+                # Handle nested branch object (v could be dict or BranchInfo object)
+                if isinstance(v, dict):
+                    update_data["branch"] = v
+                else:
+                    update_data["branch"] = {
+                        "location_id": v.location_id,
+                        "branch_id": v.branch_id
+                    }
+            elif k in ["course_category_id", "course_id", "course_duration", "location_id"]:
+                # Handle flat fields for backward compatibility
+                # Convert flat fields to nested structure
+                if k == "course_category_id":
+                    if "course" not in update_data:
+                        update_data["course"] = {}
+                    update_data["course"]["category_id"] = v
+                elif k == "course_id":
+                    if "course" not in update_data:
+                        update_data["course"] = {}
+                    update_data["course"]["course_id"] = v
+                elif k == "course_duration":
+                    if "course" not in update_data:
+                        update_data["course"] = {}
+                    update_data["course"]["duration"] = v
+                elif k == "location_id":
+                    if "branch" not in update_data:
+                        update_data["branch"] = {}
+                    update_data["branch"]["location_id"] = v
+            else:
+                update_data[k] = v
+
         if not update_data:
             raise HTTPException(status_code=400, detail="No update data provided")
-
-        # Ensure date_of_birth and gender are included in the update
-        if user_update.date_of_birth:
-            update_data["date_of_birth"] = user_update.date_of_birth
-        if user_update.gender:
-            update_data["gender"] = user_update.gender
 
         update_data["updated_at"] = datetime.utcnow()
         

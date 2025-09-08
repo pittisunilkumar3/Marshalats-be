@@ -28,25 +28,17 @@ async def get_current_user_or_superadmin(credentials: HTTPAuthorizationCredentia
     """
     db = get_db()
     try:
-        print(f"🔍 DEBUG: Attempting to decode token: {credentials.credentials[:50]}...")
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         user_role: str = payload.get("role")
-
-        print(f"🔍 DEBUG: Token payload - user_id: {user_id}, role: {user_role}")
 
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
         # Check if it's a superadmin token
         if user_role == "superadmin":
-            print(f"🔍 DEBUG: Looking for superadmin with ID: {user_id}")
             user = await db.superadmins.find_one({"id": user_id})
-            print(f"🔍 DEBUG: Superadmin found: {user is not None}")
             if user is None:
-                # Try to find all superadmins to debug
-                all_superadmins = await db.superadmins.find({}).to_list(length=10)
-                print(f"🔍 DEBUG: All superadmins in DB: {[sa.get('id', 'no-id') for sa in all_superadmins]}")
                 raise HTTPException(status_code=401, detail="Super admin not found")
             # Convert superadmin to user-like format for role checking
             user_data = serialize_doc(user)
@@ -66,14 +58,11 @@ async def get_current_user_or_superadmin(credentials: HTTPAuthorizationCredentia
         # Regular user token (or token without role field)
         user = await db.users.find_one({"id": user_id})
         if user is None:
-            print(f"🔍 DEBUG: User not found in users collection with ID: {user_id}")
             raise HTTPException(status_code=401, detail="User not found")
 
-        print(f"🔍 DEBUG: Found user with role: {user.get('role')}")
         return serialize_doc(user)
-        
-    except jwt.PyJWTError as e:
-        print(f"🔍 DEBUG: JWT decode error: {e}")
+
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 def require_role_unified(allowed_roles: List[UserRole]):
@@ -83,9 +72,9 @@ def require_role_unified(allowed_roles: List[UserRole]):
     async def role_checker(current_user: dict = Depends(get_current_user_or_superadmin)):
         if not current_user.get("is_active", True):
             raise HTTPException(status_code=400, detail="Inactive user")
-            
+
         user_role = current_user["role"]
-        
+
         # Convert super_admin to SUPER_ADMIN enum for comparison
         if user_role == "super_admin":
             if UserRole.SUPER_ADMIN not in allowed_roles:
@@ -93,6 +82,6 @@ def require_role_unified(allowed_roles: List[UserRole]):
         else:
             if user_role not in [role.value for role in allowed_roles]:
                 raise HTTPException(status_code=403, detail="Insufficient permissions")
-        
+
         return current_user
     return role_checker
