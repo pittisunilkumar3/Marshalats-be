@@ -13,6 +13,7 @@ from .enrollment_routes import router as enrollment_router
 from .payment_routes import router as payment_router
 from .request_routes import router as request_router
 from .event_routes import router as event_router
+from .search_routes import router as search_router
 
 __all__ = [
     'auth_router',
@@ -27,5 +28,6 @@ __all__ = [
     'enrollment_router',
     'payment_router',
     'request_router',
-    'event_router'
+    'event_router',
+    'search_router'
 ]

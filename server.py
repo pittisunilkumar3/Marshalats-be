@@ -20,7 +20,8 @@ from routes import (
     enrollment_router,
     payment_router,
     request_router,
-    event_router
+    event_router,
+    search_router
 )
 from routes.superadmin_routes import router as superadmin_router
 
@@ -80,6 +81,7 @@ app.include_router(enrollment_router, prefix="/enrollments", tags=["Enrollments"
 app.include_router(payment_router, prefix="/payments", tags=["Payments"])
 app.include_router(request_router, prefix="/requests", tags=["Requests"])
 app.include_router(event_router, prefix="/events", tags=["Events"])
+app.include_router(search_router, prefix="/search", tags=["Search"])
 
 @app.get("/")
 async def root():
