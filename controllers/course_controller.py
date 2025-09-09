@@ -37,13 +37,13 @@ class CourseController:
         limit: int = 50,
         current_user: dict = None
     ):
-        """Get courses with nested structure"""
+        """Get courses with enhanced data including branch assignments, instructor counts, and student enrollments"""
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
 
         db = get_db()
         filter_query = {}
-        
+
         if active_only:
             filter_query["settings.active"] = True
         if category_id:
@@ -54,7 +54,63 @@ class CourseController:
             filter_query["instructor_id"] = instructor_id
 
         courses = await db.courses.find(filter_query).skip(skip).limit(limit).to_list(length=limit)
-        return {"courses": serialize_doc(courses)}
+
+        # Enhance courses with additional data
+        enhanced_courses = []
+        for course in courses:
+            # Get branch assignments for this course
+            branches = await db.branches.find({
+                "assignments.courses": course["id"],
+                "is_active": True
+            }).to_list(length=100)
+
+            # Get instructor assignments (coaches assigned to this course)
+            # For now, we'll get all coaches and filter later when we have proper course assignments
+            instructors = await db.users.find({
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            }).to_list(length=100)
+
+            # Get student enrollment count
+            enrollment_count = await db.enrollments.count_documents({
+                "course_id": course["id"],
+                "is_active": True
+            })
+
+            # Create enhanced course object
+            enhanced_course = serialize_doc(course)
+            enhanced_course.update({
+                "branch_assignments": [
+                    {
+                        "branch_id": branch["id"],
+                        "branch_name": branch["branch"]["name"],
+                        "branch_code": branch["branch"]["code"],
+                        "location": f"{branch['branch']['address']['area']}, {branch['branch']['address']['city']}"
+                    }
+                    for branch in branches
+                ],
+                "instructor_count": len(instructors),
+                "instructor_assignments": [
+                    {
+                        "instructor_id": instructor["id"],
+                        "instructor_name": f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip(),
+                        "email": instructor.get("email", "")
+                    }
+                    for instructor in instructors
+                ],
+                "student_enrollment_count": enrollment_count,
+                # Add display fields for frontend compatibility
+                "name": course["title"],  # Map title to name for frontend
+                "branches": len(branches),  # Number of branches
+                "masters": len(instructors),  # Number of instructors
+                "students": enrollment_count,  # Number of students
+                "icon": "🥋",  # Default icon for martial arts courses
+                "enabled": course.get("settings", {}).get("active", True)
+            })
+
+            enhanced_courses.append(enhanced_course)
+
+        return {"courses": enhanced_courses}
 
     @staticmethod
     async def get_course(
@@ -165,7 +221,7 @@ class CourseController:
         skip: int = 0,
         limit: int = 100
     ):
-        """Get all courses - Public endpoint (no authentication required)"""
+        """Get all courses with enhanced data - Public endpoint (no authentication required)"""
         db = get_db()
 
         # Build query
@@ -181,41 +237,66 @@ class CourseController:
         courses_cursor = db.courses.find(query).skip(skip).limit(limit)
         courses = await courses_cursor.to_list(limit)
 
+        # Enhance courses with additional data
+        enhanced_courses = []
+        for course in courses:
+            # Get branch assignments for this course
+            branches = await db.branches.find({
+                "assignments.courses": course["id"],
+                "is_active": True
+            }).to_list(length=100)
+
+            # Get instructor assignments (coaches assigned to this course)
+            instructors = await db.users.find({
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            }).to_list(length=100)
+
+            # Get student enrollment count
+            enrollment_count = await db.enrollments.count_documents({
+                "course_id": course["id"],
+                "is_active": True
+            })
+
+            # Create enhanced course object
+            enhanced_course = serialize_doc(course)
+            enhanced_course.update({
+                "branch_assignments": [
+                    {
+                        "branch_id": branch["id"],
+                        "branch_name": branch["branch"]["name"],
+                        "branch_code": branch["branch"]["code"],
+                        "location": f"{branch['branch']['address']['area']}, {branch['branch']['address']['city']}"
+                    }
+                    for branch in branches
+                ],
+                "instructor_count": len(instructors),
+                "instructor_assignments": [
+                    {
+                        "instructor_id": instructor["id"],
+                        "instructor_name": f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip(),
+                        "email": instructor.get("email", "")
+                    }
+                    for instructor in instructors
+                ],
+                "student_enrollment_count": enrollment_count,
+                # Add display fields for frontend compatibility
+                "name": course["title"],  # Map title to name for frontend
+                "branches": len(branches),  # Number of branches
+                "masters": len(instructors),  # Number of instructors
+                "students": enrollment_count,  # Number of students
+                "icon": "🥋",  # Default icon for martial arts courses
+                "enabled": course.get("settings", {}).get("active", True)
+            })
+
+            enhanced_courses.append(enhanced_course)
+
         # Get total count
         total = await db.courses.count_documents(query)
 
-        # Format courses for public consumption
-        public_courses = []
-        for course in courses:
-            public_course = {
-                "id": course.get("id"),
-                "title": course.get("title"),
-                "code": course.get("code"),
-                "description": course.get("description"),
-                "difficulty_level": course.get("difficulty_level"),
-                "category_id": course.get("category_id"),
-                "pricing": {
-                    "currency": course.get("pricing", {}).get("currency", "INR"),
-                    "amount": course.get("pricing", {}).get("amount", 0)
-                },
-                "student_requirements": {
-                    "max_students": course.get("student_requirements", {}).get("max_students", 0),
-                    "min_age": course.get("student_requirements", {}).get("min_age", 0),
-                    "max_age": course.get("student_requirements", {}).get("max_age", 100),
-                    "prerequisites": course.get("student_requirements", {}).get("prerequisites", [])
-                },
-                "offers_certification": course.get("settings", {}).get("offers_certification", False),
-                "media_resources": {
-                    "course_image_url": course.get("media_resources", {}).get("course_image_url"),
-                    "promo_video_url": course.get("media_resources", {}).get("promo_video_url")
-                },
-                "created_at": course.get("created_at")
-            }
-            public_courses.append(public_course)
-
         return {
-            "message": f"Retrieved {len(public_courses)} courses successfully",
-            "courses": public_courses,
+            "message": f"Retrieved {len(enhanced_courses)} courses successfully",
+            "courses": enhanced_courses,
             "total": total,
             "skip": skip,
             "limit": limit

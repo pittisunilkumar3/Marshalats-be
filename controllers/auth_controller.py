@@ -8,9 +8,10 @@ import logging
 import uuid
 
 from models.user_models import UserCreate, UserLogin, ForgotPassword, ResetPassword, UserUpdate, BaseUser, UserRole
-from utils.auth import hash_password, verify_password, create_access_token, get_current_active_user
+from utils.auth import hash_password, verify_password, create_access_token, get_current_active_user, SECRET_KEY, ALGORITHM
 from utils.database import get_db
 from utils.helpers import serialize_doc, log_activity, send_sms
+from utils.email_service import send_password_reset_email
 
 class AuthController:
     @staticmethod
@@ -154,29 +155,101 @@ class AuthController:
 
     @staticmethod
     async def forgot_password(forgot_password_data: ForgotPassword):
-        """Initiate password reset process"""
-        db = get_db()
-        user = await db.users.find_one({"email": forgot_password_data.email})
-        if not user:
-            # Don't reveal that the user does not exist
-            return {"message": "If an account with that email exists, a password reset link has been sent."}
+        """Initiate password reset process with email functionality"""
+        try:
+            db = get_db()
+            user = await db.users.find_one({"email": forgot_password_data.email})
 
-        # Generate a short-lived token for password reset
-        reset_token = create_access_token(
-            data={"sub": user["id"], "scope": "password_reset"},
-            expires_delta=timedelta(minutes=15)
-        )
+            # Always return the same message for security (don't reveal if user exists)
+            standard_message = "If an account with that email exists, a password reset link has been sent."
 
-        # In a real application, you would email this token to the user
-        # For this example, we'll just log it.
-        logging.info(f"Password reset token for {user['email']}: {reset_token}")
+            # Initialize variables
+            email_sent = False
+            reset_token = None
+            user_found = bool(user)
 
-        await send_sms(user["phone"], f"Your password reset token is: {reset_token}")
+            if not user:
+                # Log the attempt for monitoring
+                logging.info(f"Password reset requested for non-existent email: {forgot_password_data.email}")
 
-        response = {"message": "If an account with that email exists, a password reset link has been sent."}
-        if os.environ.get("TESTING") == "True":
-            response["reset_token"] = reset_token
-        return response
+                # SECURITY: Still send a "notification" email to the provided address
+                # This prevents timing attacks and doesn't reveal if user exists
+                logging.info(f"Attempting to send security notification email to non-existent user: {forgot_password_data.email}")
+                try:
+                    email_sent = await send_password_reset_email(
+                        to_email=forgot_password_data.email,
+                        reset_token="invalid_token_user_not_found",
+                        user_name="User",
+                        user_exists=False  # Flag to send different email content
+                    )
+
+                    logging.info(f"Email service returned result for non-existent user {forgot_password_data.email}: {email_sent}")
+
+                    if email_sent:
+                        logging.info(f"Security notification email sent to non-existent user: {forgot_password_data.email}")
+                    else:
+                        logging.error(f"Failed to send security notification email to non-existent user: {forgot_password_data.email}")
+
+                except Exception as email_error:
+                    logging.error(f"Exception sending security notification email: {str(email_error)}")
+                    import traceback
+                    logging.error(f"Traceback: {traceback.format_exc()}")
+                    email_sent = False
+            else:
+                # User exists - proceed with normal password reset
+                logging.info(f"Password reset requested for existing user: {user['email']}")
+
+                # Generate a short-lived token for password reset
+                reset_token = create_access_token(
+                    data={"sub": user["id"], "scope": "password_reset"},
+                    expires_delta=timedelta(minutes=15)
+                )
+
+                # Send password reset email
+                user_name = user.get("full_name", f"{user.get('first_name', '')} {user.get('last_name', '')}").strip()
+
+                try:
+                    email_sent = await send_password_reset_email(
+                        to_email=user["email"],
+                        reset_token=reset_token,
+                        user_name=user_name or "User",
+                        user_exists=True
+                    )
+
+                    # Log the password reset attempt with detailed info
+                    logging.info(f"Password reset email sent to {user['email']}: {email_sent}")
+
+                    if not email_sent:
+                        logging.error(f"Failed to send password reset email to {user['email']}")
+
+                except Exception as email_error:
+                    logging.error(f"Email sending error for {user['email']}: {str(email_error)}")
+                    email_sent = False
+
+                # Also send SMS as backup (if phone number exists)
+                if user.get("phone"):
+                    try:
+                        sms_message = f"Password reset requested for your account. Check your email ({user['email']}) for reset instructions. If you didn't request this, please ignore."
+                        await send_sms(user["phone"], sms_message)
+                        logging.info(f"Backup SMS sent to {user['phone']}")
+                    except Exception as sms_error:
+                        logging.error(f"SMS sending error for {user['phone']}: {str(sms_error)}")
+
+            # Prepare response
+            response = {"message": standard_message}
+
+            # Include additional info in response for testing/debugging purposes
+            if os.environ.get("TESTING") == "True":
+                response["reset_token"] = reset_token if user_found else "invalid_token"
+                response["email_sent"] = email_sent
+                response["user_found"] = user_found
+
+            return response
+
+        except Exception as e:
+            logging.error(f"Forgot password process failed: {str(e)}")
+            # Return generic message even on system errors
+            return {"message": "If an account with that email exists, a password reset link has been sent.", "email_sent": False}
 
     @staticmethod
     async def reset_password(reset_password_data: ResetPassword):
@@ -184,8 +257,8 @@ class AuthController:
         try:
             payload = jwt.decode(
                 reset_password_data.token,
-                os.environ.get('SECRET_KEY', 'student_management_secret_key_2025'),
-                algorithms=["HS256"]
+                SECRET_KEY,
+                algorithms=[ALGORITHM]
             )
             if payload.get("scope") != "password_reset":
                 raise HTTPException(status_code=401, detail="Invalid token scope")
