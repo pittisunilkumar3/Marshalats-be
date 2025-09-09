@@ -168,3 +168,69 @@ class SuperAdminController:
             )
         
         return serialize_doc(admin)
+
+    @staticmethod
+    async def update_superadmin_profile(admin_id: str, update_data: dict):
+        """Update super admin profile"""
+        from utils.database import get_db
+        from utils.helpers import serialize_doc
+        from datetime import datetime
+
+        db = get_db()
+
+        # Check if admin exists
+        admin = await db.superadmins.find_one({"id": admin_id})
+        if admin is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Super admin not found"
+            )
+
+        # Check if email is being updated and if it already exists
+        if "email" in update_data and update_data["email"] != admin["email"]:
+            existing_admin = await db.superadmins.find_one({
+                "email": update_data["email"],
+                "id": {"$ne": admin_id}
+            })
+            if existing_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already exists"
+                )
+
+        # Check if phone is being updated and if it already exists
+        if "phone" in update_data and update_data["phone"] != admin["phone"]:
+            existing_admin = await db.superadmins.find_one({
+                "phone": update_data["phone"],
+                "id": {"$ne": admin_id}
+            })
+            if existing_admin:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Phone number already exists"
+                )
+
+        # Prepare update data
+        update_fields = {}
+        for field, value in update_data.items():
+            if value is not None:
+                update_fields[field] = value
+
+        if update_fields:
+            update_fields["updated_at"] = datetime.utcnow()
+
+            # Update the admin
+            result = await db.superadmins.update_one(
+                {"id": admin_id},
+                {"$set": update_fields}
+            )
+
+            if result.modified_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No changes were made"
+                )
+
+        # Get updated admin data
+        updated_admin = await db.superadmins.find_one({"id": admin_id})
+        return serialize_doc(updated_admin)

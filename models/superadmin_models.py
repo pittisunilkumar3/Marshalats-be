@@ -23,6 +23,11 @@ class SuperAdminLogin(BaseModel):
     email: EmailStr
     password: str
 
+class SuperAdminUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+
 class SuperAdminResponse(BaseModel):
     id: str
     full_name: str

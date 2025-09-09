@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from controllers.superadmin_controller import SuperAdminController
 from controllers.coach_controller import CoachController
-from models.superadmin_models import SuperAdminRegister, SuperAdminLogin
+from models.superadmin_models import SuperAdminRegister, SuperAdminLogin, SuperAdminUpdate
 from models.coach_models import CoachCreate, CoachUpdate
 
 router = APIRouter()
@@ -32,6 +32,37 @@ async def get_my_profile(current_admin = Depends(get_current_superadmin)):
         "status": "success",
         "data": admin_data
     }
+
+@router.put("/me")
+async def update_my_profile(
+    update_data: SuperAdminUpdate,
+    current_admin = Depends(get_current_superadmin)
+):
+    """Update current super admin profile"""
+    try:
+        # Convert Pydantic model to dict, excluding None values
+        update_dict = update_data.dict(exclude_unset=True)
+
+        updated_admin = await SuperAdminController.update_superadmin_profile(
+            current_admin["id"],
+            update_dict
+        )
+
+        # Remove password hash from response
+        admin_data = {k: v for k, v in updated_admin.items() if k != "password_hash"}
+
+        return {
+            "status": "success",
+            "message": "Profile updated successfully",
+            "data": admin_data
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update profile: {str(e)}"
+        )
 
 @router.get("/verify-token")
 async def verify_token(current_admin = Depends(get_current_superadmin)):
