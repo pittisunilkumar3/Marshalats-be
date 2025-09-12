@@ -5,9 +5,12 @@ import secrets
 import uuid
 
 from models.coach_models import CoachCreate, CoachUpdate, Coach, CoachResponse, CoachLogin, CoachLoginResponse
-from utils.auth import hash_password, verify_password, create_access_token
+from utils.auth import hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 from utils.database import get_db
 from utils.helpers import serialize_doc, log_activity, send_sms, send_whatsapp
+from utils.email_service import send_password_reset_email
+import jwt
+from datetime import timedelta
 
 class CoachController:
     @staticmethod
@@ -371,3 +374,72 @@ class CoachController:
                 status_code=500,
                 detail=f"Internal server error during coach login: {str(e)}"
             )
+
+    @staticmethod
+    async def forgot_password(email: str):
+        """Initiate password reset process for coach"""
+        db = get_db()
+        coach = await db.coaches.find_one({"contact_info.email": email})
+
+        if not coach:
+            # Don't reveal that the coach does not exist
+            return {"message": "If a coach account with that email exists, a password reset link has been sent."}
+
+        # Generate a short-lived token for password reset (same as student implementation)
+        reset_token = create_access_token(
+            data={"sub": coach["id"], "scope": "password_reset"},
+            expires_delta=timedelta(minutes=15)
+        )
+
+        # Send password reset email with coach branding using webhook (same as /api/email/send-webhook-email)
+        coach_name = coach.get("full_name", "Coach")
+        from utils.email_service import send_password_reset_email_webhook
+        email_sent = await send_password_reset_email_webhook(email, reset_token, coach_name, "coach")
+
+        # Log the password reset attempt (same as student implementation)
+        import logging
+        logging.info(f"Password reset requested for coach {email}. Email sent: {email_sent}")
+
+        # Also send SMS as backup (if phone number exists) - same as student implementation
+        coach_phone = coach.get("phone") or coach.get("contact_info", {}).get("phone")
+        if coach_phone:
+            from utils.helpers import send_sms
+            sms_message = f"Coach password reset requested for your account. Check your email ({email}) for reset instructions. If you didn't request this, please ignore."
+            await send_sms(coach_phone, sms_message)
+
+        response = {"message": "If a coach account with that email exists, a password reset link has been sent."}
+
+        # Include token in response for testing purposes (same as student implementation)
+        import os
+        if os.environ.get("TESTING") == "True":
+            response["reset_token"] = reset_token
+            response["email_sent"] = email_sent
+
+        return response
+
+    @staticmethod
+    async def reset_password(token: str, new_password: str):
+        """Reset coach password using a token"""
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("scope") != "password_reset":
+                raise HTTPException(status_code=401, detail="Invalid token scope")
+
+            coach_id = payload.get("sub")
+            if not coach_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        new_hashed_password = hash_password(new_password)
+        db = get_db()
+        result = await db.coaches.update_one(
+            {"id": coach_id},
+            {"$set": {"password": new_hashed_password, "updated_at": datetime.utcnow()}}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Coach not found")
+
+        return {"message": "Password has been reset successfully"}

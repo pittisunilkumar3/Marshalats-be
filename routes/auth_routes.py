@@ -1,8 +1,17 @@
 from fastapi import APIRouter, Depends, Request, status
 from controllers.auth_controller import AuthController
 from models.user_models import UserCreate, UserLogin, ForgotPassword, ResetPassword, UserUpdate
+from pydantic import BaseModel, EmailStr
 
 router = APIRouter()
+
+class CheckUserRequest(BaseModel):
+    email: EmailStr
+
+@router.post("/check-user")
+async def check_user(check_user_data: CheckUserRequest):
+    """Check if a user exists with the given email address"""
+    return await AuthController.check_user_exists(check_user_data.email)
 
 @router.post("/register")
 async def register_user(user_data: UserCreate, request: Request):

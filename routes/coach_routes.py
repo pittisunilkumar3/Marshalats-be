@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from typing import Optional
 
 from controllers.coach_controller import CoachController
-from models.coach_models import CoachCreate, CoachUpdate, CoachLogin
+from models.coach_models import CoachCreate, CoachUpdate, CoachLogin, CoachForgotPassword, CoachResetPassword
 from models.user_models import UserRole
 from utils.unified_auth import require_role_unified
 
@@ -12,6 +12,16 @@ router = APIRouter()
 async def coach_login(login_data: CoachLogin):
     """Coach login endpoint"""
     return await CoachController.login_coach(login_data)
+
+@router.post("/forgot-password")
+async def forgot_password(forgot_password_data: CoachForgotPassword):
+    """Initiate password reset process for coach"""
+    return await CoachController.forgot_password(forgot_password_data.email)
+
+@router.post("/reset-password")
+async def reset_password(reset_password_data: CoachResetPassword):
+    """Reset coach password using a token"""
+    return await CoachController.reset_password(reset_password_data.token, reset_password_data.new_password)
 
 @router.get("/me")
 async def get_coach_profile(

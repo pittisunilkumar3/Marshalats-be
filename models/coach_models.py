@@ -84,3 +84,10 @@ class CoachResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+class CoachForgotPassword(BaseModel):
+    email: EmailStr
+
+class CoachResetPassword(BaseModel):
+    token: str
+    new_password: str

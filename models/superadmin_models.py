@@ -36,3 +36,10 @@ class SuperAdminResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+class SuperAdminForgotPassword(BaseModel):
+    email: EmailStr
+
+class SuperAdminResetPassword(BaseModel):
+    token: str
+    new_password: str

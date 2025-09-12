@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from controllers.superadmin_controller import SuperAdminController
 from controllers.coach_controller import CoachController
-from models.superadmin_models import SuperAdminRegister, SuperAdminLogin, SuperAdminUpdate
+from models.superadmin_models import SuperAdminRegister, SuperAdminLogin, SuperAdminUpdate, SuperAdminForgotPassword, SuperAdminResetPassword
 from models.coach_models import CoachCreate, CoachUpdate
 
 router = APIRouter()
@@ -22,6 +22,16 @@ async def register_superadmin(admin_data: SuperAdminRegister):
 async def login_superadmin(login_data: SuperAdminLogin):
     """Login super admin and get JWT token"""
     return await SuperAdminController.login_superadmin(login_data)
+
+@router.post("/forgot-password")
+async def forgot_password(forgot_password_data: SuperAdminForgotPassword):
+    """Initiate password reset process for superadmin"""
+    return await SuperAdminController.forgot_password(forgot_password_data.email)
+
+@router.post("/reset-password")
+async def reset_password(reset_password_data: SuperAdminResetPassword):
+    """Reset superadmin password using a token"""
+    return await SuperAdminController.reset_password(reset_password_data.token, reset_password_data.new_password)
 
 @router.get("/me")
 async def get_my_profile(current_admin = Depends(get_current_superadmin)):

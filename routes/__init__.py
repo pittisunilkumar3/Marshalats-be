@@ -14,6 +14,7 @@ from .payment_routes import router as payment_router
 from .request_routes import router as request_router
 from .event_routes import router as event_router
 from .search_routes import router as search_router
+from .email_routes import router as email_router
 
 __all__ = [
     'auth_router',
@@ -29,5 +30,6 @@ __all__ = [
     'payment_router',
     'request_router',
     'event_router',
-    'search_router'
+    'search_router',
+    'email_router'
 ]

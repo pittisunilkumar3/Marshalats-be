@@ -10,6 +10,7 @@ from pathlib import Path
 from models.superadmin_models import SuperAdmin, SuperAdminRegister, SuperAdminLogin, SuperAdminResponse
 from utils.database import get_db
 from utils.helpers import serialize_doc
+from utils.email_service import send_password_reset_email
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent.parent
@@ -234,3 +235,70 @@ class SuperAdminController:
         # Get updated admin data
         updated_admin = await db.superadmins.find_one({"id": admin_id})
         return serialize_doc(updated_admin)
+
+    @staticmethod
+    async def forgot_password(email: str):
+        """Initiate password reset process for superadmin"""
+        db = get_db()
+        admin = await db.superadmins.find_one({"email": email})
+
+        if not admin:
+            # Don't reveal that the admin does not exist
+            return {"message": "If a superadmin account with that email exists, a password reset link has been sent."}
+
+        # Generate a short-lived token for password reset (same as student implementation)
+        reset_token = SuperAdminController.create_access_token(
+            data={"sub": admin["id"], "scope": "password_reset"},
+            expires_delta=timedelta(minutes=15)
+        )
+
+        # Send password reset email with superadmin branding using webhook (same as /api/email/send-webhook-email)
+        admin_name = admin.get("full_name", "Superadmin")
+        from utils.email_service import send_password_reset_email_webhook
+        email_sent = await send_password_reset_email_webhook(email, reset_token, admin_name, "superadmin")
+
+        # Log the password reset attempt (same as student implementation)
+        import logging
+        logging.info(f"Password reset requested for superadmin {email}. Email sent: {email_sent}")
+
+        # Also send SMS as backup (if phone number exists) - same as student implementation
+        if admin.get("phone"):
+            from utils.helpers import send_sms
+            sms_message = f"Superadmin password reset requested for your account. Check your email ({email}) for reset instructions. If you didn't request this, please ignore."
+            await send_sms(admin["phone"], sms_message)
+
+        response = {"message": "If a superadmin account with that email exists, a password reset link has been sent."}
+
+        # Include token in response for testing purposes (same as student implementation)
+        if os.environ.get("TESTING") == "True":
+            response["reset_token"] = reset_token
+            response["email_sent"] = email_sent
+
+        return response
+
+    @staticmethod
+    async def reset_password(token: str, new_password: str):
+        """Reset superadmin password using a token"""
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("scope") != "password_reset":
+                raise HTTPException(status_code=401, detail="Invalid token scope")
+
+            admin_id = payload.get("sub")
+            if not admin_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        new_hashed_password = SuperAdminController.hash_password(new_password)
+        db = get_db()
+        result = await db.superadmins.update_one(
+            {"id": admin_id},
+            {"$set": {"password": new_hashed_password, "updated_at": datetime.utcnow()}}
+        )
+
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Superadmin not found")
+
+        return {"message": "Password has been reset successfully"}

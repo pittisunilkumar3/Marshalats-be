@@ -21,7 +21,8 @@ from routes import (
     payment_router,
     request_router,
     event_router,
-    search_router
+    search_router,
+    email_router
 )
 from routes.superadmin_routes import router as superadmin_router
 
@@ -67,21 +68,22 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(superadmin_router, prefix="/superadmin", tags=["Super Admin"])
-app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-app.include_router(user_router, prefix="/users", tags=["Users"])
-app.include_router(coach_router, prefix="/coaches", tags=["Coaches"])
-app.include_router(branch_router, prefix="/branches", tags=["Branches"])
-app.include_router(course_router, prefix="/courses", tags=["Courses"])
-app.include_router(category_router, prefix="/categories", tags=["Categories"])
-app.include_router(duration_router, prefix="/durations", tags=["Durations"])
-app.include_router(location_router, prefix="/locations", tags=["Locations"])
-app.include_router(branch_public_router, prefix="/branches", tags=["Branches Public"])
-app.include_router(enrollment_router, prefix="/enrollments", tags=["Enrollments"])
-app.include_router(payment_router, prefix="/payments", tags=["Payments"])
-app.include_router(request_router, prefix="/requests", tags=["Requests"])
-app.include_router(event_router, prefix="/events", tags=["Events"])
-app.include_router(search_router, prefix="/search", tags=["Search"])
+app.include_router(superadmin_router, prefix="/api/superadmin", tags=["Super Admin"])
+app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(user_router, prefix="/api/users", tags=["Users"])
+app.include_router(coach_router, prefix="/api/coaches", tags=["Coaches"])
+app.include_router(branch_router, prefix="/api/branches", tags=["Branches"])
+app.include_router(course_router, prefix="/api/courses", tags=["Courses"])
+app.include_router(category_router, prefix="/api/categories", tags=["Categories"])
+app.include_router(duration_router, prefix="/api/durations", tags=["Durations"])
+app.include_router(location_router, prefix="/api/locations", tags=["Locations"])
+app.include_router(branch_public_router, prefix="/api/public/branches", tags=["Public Branches"])
+app.include_router(enrollment_router, prefix="/api/enrollments", tags=["Enrollments"])
+app.include_router(payment_router, prefix="/api/payments", tags=["Payments"])
+app.include_router(request_router, prefix="/api/requests", tags=["Requests"])
+app.include_router(event_router, prefix="/api/events", tags=["Events"])
+app.include_router(search_router, prefix="/api/search", tags=["Search"])
+app.include_router(email_router, prefix="/api/email", tags=["Email"])
 
 @app.get("/")
 async def root():
