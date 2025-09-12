@@ -22,7 +22,8 @@ from routes import (
     request_router,
     event_router,
     search_router,
-    email_router
+    email_router,
+    dashboard_router
 )
 from routes.superadmin_routes import router as superadmin_router
 
@@ -84,6 +85,7 @@ app.include_router(request_router, prefix="/api/requests", tags=["Requests"])
 app.include_router(event_router, prefix="/api/events", tags=["Events"])
 app.include_router(search_router, prefix="/api/search", tags=["Search"])
 app.include_router(email_router, prefix="/api/email", tags=["Email"])
+app.include_router(dashboard_router, prefix="/api/dashboard", tags=["Dashboard"])
 
 @app.get("/")
 async def root():
