@@ -8,10 +8,10 @@ from .category_models import Category, CategoryCreate, CategoryUpdate, CategoryR
 from .duration_models import Duration, DurationCreate, DurationUpdate, DurationResponse
 from .location_models import Location, LocationCreate, LocationUpdate, LocationWithBranches, LocationResponse
 from .enrollment_models import PaymentStatus, Enrollment, EnrollmentCreate
-from .payment_models import Payment, PaymentProof, PaymentCreate
+from .payment_models import Payment, PaymentProof, PaymentCreate, PaymentStatus, PaymentType, PaymentMethod, RegistrationPaymentCreate, RegistrationPaymentResponse
 from .attendance_models import AttendanceMethod, Attendance, AttendanceCreate, BiometricAttendance
 from .product_models import Product, ProductCreate, ProductUpdate, ProductPurchase, ProductPurchaseCreate, RestockRequest
-from .notification_models import NotificationType, NotificationTemplate, NotificationTemplateCreate, TriggerNotification, NotificationLog, BroadcastAnnouncement, ClassReminder
+from .notification_models import NotificationType, NotificationTemplate, NotificationTemplateCreate, TriggerNotification, NotificationLog, BroadcastAnnouncement, ClassReminder, PaymentNotification, PaymentNotificationCreate
 from .holiday_models import Holiday, HolidayCreate
 from .complaint_models import ComplaintStatus, Complaint, ComplaintCreate, ComplaintUpdate
 from .rating_models import CoachRating, CoachRatingCreate
@@ -21,7 +21,7 @@ from .transfer_models import TransferRequestStatus, TransferRequest, TransferReq
 from .coursechange_models import CourseChangeRequestStatus, CourseChangeRequest, CourseChangeRequestCreate, CourseChangeRequestUpdate
 from .event_models import Event, EventCreate
 from .qr_models import QRCodeSession
-from .student_models import StudentEnrollmentCreate, StudentPaymentCreate
+from .student_models import StudentEnrollmentCreate, StudentPaymentCreate, StudentRegistrationPayment, PaymentCalculation, CoursePaymentInfo
 
 __all__ = [
     # User models
@@ -46,7 +46,8 @@ __all__ = [
     'PaymentStatus', 'Enrollment', 'EnrollmentCreate',
     
     # Payment models
-    'Payment', 'PaymentProof', 'PaymentCreate',
+    'Payment', 'PaymentProof', 'PaymentCreate', 'PaymentStatus', 'PaymentType', 'PaymentMethod',
+    'RegistrationPaymentCreate', 'RegistrationPaymentResponse',
     
     # Attendance models
     'AttendanceMethod', 'Attendance', 'AttendanceCreate', 'BiometricAttendance',
@@ -55,7 +56,7 @@ __all__ = [
     'Product', 'ProductCreate', 'ProductUpdate', 'ProductPurchase', 'ProductPurchaseCreate', 'RestockRequest',
     
     # Notification models
-    'NotificationType', 'NotificationTemplate', 'NotificationTemplateCreate', 'TriggerNotification', 'NotificationLog', 'BroadcastAnnouncement', 'ClassReminder',
+    'NotificationType', 'NotificationTemplate', 'NotificationTemplateCreate', 'TriggerNotification', 'NotificationLog', 'BroadcastAnnouncement', 'ClassReminder', 'PaymentNotification', 'PaymentNotificationCreate',
     
     # Holiday models
     'Holiday', 'HolidayCreate',
@@ -85,5 +86,6 @@ __all__ = [
     'QRCodeSession',
     
     # Student models
-    'StudentEnrollmentCreate', 'StudentPaymentCreate'
+    'StudentEnrollmentCreate', 'StudentPaymentCreate', 'StudentRegistrationPayment',
+    'PaymentCalculation', 'CoursePaymentInfo'
 ]

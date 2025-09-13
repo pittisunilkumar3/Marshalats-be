@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from typing import Optional
 from controllers.course_controller import CourseController
+from controllers.payment_controller import PaymentController
 from models.course_models import CourseCreate, CourseUpdate
 from models.user_models import UserRole
 from utils.auth import require_role, get_current_active_user
@@ -56,6 +57,15 @@ async def get_course_stats(
     current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
 ):
     return await CourseController.get_course_stats(course_id, current_user)
+
+@router.get("/{course_id}/payment-info")
+async def get_course_payment_info(
+    course_id: str,
+    branch_id: str = Query(..., description="Branch ID"),
+    duration: str = Query(..., description="Duration code")
+):
+    """Get payment information for a course (public endpoint for registration)"""
+    return await PaymentController.get_course_payment_info(course_id, branch_id, duration)
 
 @router.get("/public/all")
 async def get_public_courses(

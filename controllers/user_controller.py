@@ -403,6 +403,7 @@ class UserController:
         current_user: dict = Depends(get_current_user_or_superadmin)
     ):
         """Get detailed student information with course enrollment data (Authenticated endpoint)"""
+
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -460,11 +461,12 @@ class UserController:
                     today = date.today()
                     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
 
-            # Get enrollments for this student
+            # Get course information from multiple sources
+            courses_info = []
+
+            # Method 1: Check for enrollments in enrollments collection
             enrollments = await db.enrollments.find({"student_id": student_id, "is_active": True}).to_list(100)
 
-            # Get course details for each enrollment
-            courses_info = []
             for enrollment in enrollments:
                 course = await db.courses.find_one({"id": enrollment["course_id"]})
                 if course:
@@ -488,6 +490,42 @@ class UserController:
                         "duration": f"{duration_days} days" if duration_days else "Not specified",
                         "enrollment_date": enrollment.get("enrollment_date"),
                         "payment_status": enrollment.get("payment_status", "pending")
+                    })
+
+            # Method 2: Check for course info directly in user model (for students created via registration)
+            if not courses_info and student.get("course"):
+                course_info = student["course"]
+                branch_info = student.get("branch", {})
+
+                # Get course details from courses collection
+                course_id = course_info.get("course_id")
+                course = await db.courses.find_one({"id": course_id})
+                if course:
+                    # Get branch details
+                    branch_name = "Not specified"
+                    if branch_info.get("branch_id"):
+                        branch = await db.branches.find_one({"id": branch_info["branch_id"]})
+                        if branch:
+                            branch_name = branch.get("name", "Unknown Branch")
+
+                    # Get duration details - handle both UUID and string formats
+                    duration_name = course_info.get("duration", "Not specified")
+                    if course_info.get("duration"):
+                        # If it's already a readable string, use it directly
+                        if isinstance(course_info["duration"], str) and not course_info["duration"].startswith(("uuid-", "duration-")):
+                            duration_name = course_info["duration"]
+                        else:
+                            # Try to look up in durations collection
+                            duration = await db.durations.find_one({"id": course_info["duration"]})
+                            if duration:
+                                duration_name = duration.get("name", duration_name)
+
+                    courses_info.append({
+                        "course_name": course.get("title", "Unknown Course"),
+                        "level": course.get("difficulty_level", "Beginner"),
+                        "duration": duration_name,
+                        "enrollment_date": student.get("created_at"),
+                        "payment_status": "paid"  # Assume paid for registration-based students
                     })
 
             # Prepare student details response

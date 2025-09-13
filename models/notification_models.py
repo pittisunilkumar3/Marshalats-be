@@ -47,3 +47,30 @@ class BroadcastAnnouncement(BaseModel):
 class ClassReminder(BaseModel):
     course_id: str
     branch_id: str
+
+# New models for payment and registration notifications
+class PaymentNotification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    payment_id: str
+    student_id: str
+    notification_type: str  # "payment_received", "registration_complete", etc.
+    title: str
+    message: str
+    amount: Optional[float] = None
+    course_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    is_read: bool = False
+    priority: str = "normal"  # "low", "normal", "high", "urgent"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    read_at: Optional[datetime] = None
+
+class PaymentNotificationCreate(BaseModel):
+    payment_id: str
+    student_id: str
+    notification_type: str
+    title: str
+    message: str
+    amount: Optional[float] = None
+    course_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    priority: str = "normal"
