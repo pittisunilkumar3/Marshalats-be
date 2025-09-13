@@ -33,6 +33,22 @@ async def get_student_details(
     """Get detailed student information with course enrollment data (Authenticated endpoint)"""
     return await UserController.get_student_details(current_user)
 
+@router.get("/{user_id}/enrollments")
+async def get_user_enrollments(
+    user_id: str,
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
+):
+    """Get enrollment history for a specific student"""
+    return await UserController.get_user_enrollments(user_id, current_user)
+
+@router.get("/{user_id}/payments")
+async def get_user_payments(
+    user_id: str,
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN, UserRole.COACH]))
+):
+    """Get payment history for a specific student"""
+    return await UserController.get_user_payments(user_id, current_user)
+
 @router.get("/{user_id}")
 async def get_user_by_id(
     user_id: str = Path(..., description="User ID"),

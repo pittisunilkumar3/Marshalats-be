@@ -732,3 +732,157 @@ class UserController:
             "students": enriched_students,
             "total": len(enriched_students)
         }
+
+    @staticmethod
+    async def get_user_enrollments(user_id: str, current_user: dict = None):
+        """Get enrollment history for a specific student"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Verify user exists and is a student
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        if user.get("role") != "student":
+            raise HTTPException(status_code=400, detail="User is not a student")
+
+        # Permission check: coaches can only view students from their branch
+        current_role = current_user.get("role")
+        if current_role in ["coach", "coach_admin"] and current_user.get("branch_id"):
+            if user.get("branch_id") != current_user["branch_id"]:
+                raise HTTPException(status_code=403, detail="You can only view students from your branch")
+
+        try:
+            # Get enrollments for this student
+            enrollments = await db.enrollments.find({
+                "student_id": user_id
+            }).sort("created_at", -1).to_list(length=100)
+
+            # Enhance enrollments with course and branch information
+            enhanced_enrollments = []
+            for enrollment in enrollments:
+                # Get course details
+                course = await db.courses.find_one({"id": enrollment.get("course_id")})
+
+                # Get branch details
+                branch = await db.branches.find_one({"id": enrollment.get("branch_id")})
+
+                enhanced_enrollment = serialize_doc(enrollment)
+                enhanced_enrollment.update({
+                    "course_name": course.get("title", course.get("name", "Unknown Course")) if course else "Unknown Course",
+                    "course_difficulty": course.get("difficulty_level", "Beginner") if course else "Beginner",
+                    "branch_name": branch.get("branch", {}).get("name", "Unknown Branch") if branch else "Unknown Branch",
+                    "enrollment_date": enrollment.get("enrollment_date", enrollment.get("created_at", "")),
+                    "completion_date": enrollment.get("completion_date"),
+                    "status": enrollment.get("status", "active"),
+                    "progress": enrollment.get("progress", 0),
+                    "is_active": enrollment.get("is_active", True)
+                })
+                enhanced_enrollments.append(enhanced_enrollment)
+
+            return {
+                "enrollments": enhanced_enrollments,
+                "total": len(enhanced_enrollments)
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching enrollment history: {str(e)}")
+
+    @staticmethod
+    async def get_user_payments(user_id: str, current_user: dict = None):
+        """Get payment history for a specific student"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Verify user exists and is a student
+        user = await db.users.find_one({"id": user_id})
+        if not user:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        if user.get("role") != "student":
+            raise HTTPException(status_code=400, detail="User is not a student")
+
+        # Permission check: coaches can only view students from their branch
+        current_role = current_user.get("role")
+        if current_role in ["coach", "coach_admin"] and current_user.get("branch_id"):
+            if user.get("branch_id") != current_user["branch_id"]:
+                raise HTTPException(status_code=403, detail="You can only view students from your branch")
+
+        try:
+            # Get payments for this student with course and enrollment information
+            pipeline = [
+                {"$match": {"student_id": user_id}},
+                {
+                    "$lookup": {
+                        "from": "enrollments",
+                        "localField": "enrollment_id",
+                        "foreignField": "id",
+                        "as": "enrollment_info"
+                    }
+                },
+                {"$unwind": {"path": "$enrollment_info", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$lookup": {
+                        "from": "courses",
+                        "localField": "enrollment_info.course_id",
+                        "foreignField": "id",
+                        "as": "course_info"
+                    }
+                },
+                {"$unwind": {"path": "$course_info", "preserveNullAndEmptyArrays": True}},
+                {
+                    "$project": {
+                        "id": 1,
+                        "student_id": 1,
+                        "enrollment_id": 1,
+                        "amount": 1,
+                        "payment_type": 1,
+                        "payment_method": 1,
+                        "payment_status": 1,
+                        "transaction_id": 1,
+                        "payment_date": 1,
+                        "due_date": 1,
+                        "notes": 1,
+                        "course_name": {"$ifNull": ["$course_info.title", "$course_info.name"]},
+                        "course_difficulty": "$course_info.difficulty_level",
+                        "enrollment_date": "$enrollment_info.enrollment_date",
+                        "created_at": 1,
+                        "updated_at": 1
+                    }
+                },
+                {"$sort": {"created_at": -1}}
+            ]
+
+            payments = await db.payments.aggregate(pipeline).to_list(length=100)
+
+            # Convert to serializable format
+            enhanced_payments = []
+            for payment in payments:
+                enhanced_payment = {}
+                for key, value in payment.items():
+                    if key == "_id":
+                        continue
+                    elif hasattr(value, 'isoformat'):  # datetime objects
+                        enhanced_payment[key] = value.isoformat()
+                    else:
+                        enhanced_payment[key] = value
+
+                # Add formatted payment description
+                course_name = enhanced_payment.get("course_name", "Course")
+                payment_type = enhanced_payment.get("payment_type", "payment")
+                enhanced_payment["description"] = f"{course_name} - {payment_type.replace('_', ' ').title()}"
+
+                enhanced_payments.append(enhanced_payment)
+
+            return {
+                "payments": enhanced_payments,
+                "total": len(enhanced_payments)
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching payment history: {str(e)}")
