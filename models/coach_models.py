@@ -36,6 +36,7 @@ class CoachCreate(BaseModel):
     address_info: AddressInfo
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
+    branch_id: Optional[str] = None  # Branch assignment for the coach
 
 class CoachUpdate(BaseModel):
     personal_info: Optional[PersonalInfo] = None
@@ -43,6 +44,7 @@ class CoachUpdate(BaseModel):
     address_info: Optional[AddressInfo] = None
     professional_info: Optional[ProfessionalInfo] = None
     areas_of_expertise: Optional[List[str]] = None
+    branch_id: Optional[str] = None  # Branch assignment for the coach
 
 class CoachLogin(BaseModel):
     email: EmailStr
@@ -61,6 +63,7 @@ class Coach(BaseModel):
     address_info: AddressInfo
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
+    branch_id: Optional[str] = None  # Branch assignment for the coach
     # Basic user fields for authentication and identification
     email: EmailStr  # Duplicate from contact_info for easy access
     phone: str  # Full phone with country code
@@ -80,6 +83,7 @@ class CoachResponse(BaseModel):
     address_info: AddressInfo
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
+    branch_id: Optional[str] = None  # Branch assignment for the coach
     full_name: str
     is_active: bool
     created_at: datetime

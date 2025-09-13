@@ -57,6 +57,7 @@ class CoachController:
             address_info=coach_data.address_info,
             professional_info=coach_data.professional_info,
             areas_of_expertise=coach_data.areas_of_expertise,
+            branch_id=coach_data.branch_id,  # Include branch assignment
             email=coach_data.contact_info.email,
             phone=full_phone,
             first_name=coach_data.personal_info.first_name,
@@ -131,6 +132,7 @@ class CoachController:
                 address_info=coach["address_info"],
                 professional_info=coach["professional_info"],
                 areas_of_expertise=coach["areas_of_expertise"],
+                branch_id=coach.get("branch_id"),  # Include branch assignment
                 full_name=coach["full_name"],
                 is_active=coach["is_active"],
                 created_at=coach["created_at"],
@@ -164,6 +166,7 @@ class CoachController:
             address_info=coach["address_info"],
             professional_info=coach["professional_info"],
             areas_of_expertise=coach["areas_of_expertise"],
+            branch_id=coach.get("branch_id"),  # Include branch assignment
             full_name=coach["full_name"],
             is_active=coach["is_active"],
             created_at=coach["created_at"],
@@ -235,7 +238,10 @@ class CoachController:
         
         if coach_update.areas_of_expertise:
             update_data["areas_of_expertise"] = coach_update.areas_of_expertise
-        
+
+        if coach_update.branch_id is not None:  # Allow setting to None to remove branch assignment
+            update_data["branch_id"] = coach_update.branch_id
+
         if not update_data:
             raise HTTPException(status_code=400, detail="No update data provided")
         

@@ -31,6 +31,14 @@ async def get_branch(
 ):
     return await BranchController.get_branch(branch_id, current_user)
 
+@router.get("/{branch_id}/stats")
+async def get_branch_stats(
+    branch_id: str,
+    current_user: dict = Depends(get_current_user_or_superadmin)
+):
+    """Get detailed statistics for a specific branch"""
+    return await BranchController.get_branch_stats(branch_id, current_user)
+
 @router.put("/{branch_id}")
 async def update_branch(
     branch_id: str,

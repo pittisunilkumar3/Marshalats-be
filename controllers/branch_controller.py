@@ -34,30 +34,300 @@ class BranchController:
         limit: int = 50,
         current_user: dict = None
     ):
-        """Get all branches with nested structure"""
+        """Get all branches with nested structure and statistics"""
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
-            
+
         db = get_db()
         branches = await db.branches.find({"is_active": True}).skip(skip).limit(limit).to_list(length=limit)
-        # Return branches with the nested structure intact
-        return {"branches": serialize_doc(branches)}
+
+        # Enhance branches with coach and student counts
+        enhanced_branches = []
+        for branch in branches:
+            branch_id = branch["id"]
+
+            # Count coaches assigned to this branch
+            coach_count = await db.coaches.count_documents({
+                "branch_id": branch_id,
+                "is_active": True
+            })
+
+            # Also count coaches assigned as managers or branch admins (if they exist in users collection)
+            # Count manager if assigned
+            if branch.get("manager_id"):
+                manager_exists = await db.users.count_documents({
+                    "id": branch["manager_id"],
+                    "role": {"$in": ["coach", "coach_admin"]},
+                    "is_active": True
+                })
+                coach_count += manager_exists
+
+            # Count branch admins (coaches assigned as admins)
+            if branch.get("assignments", {}).get("branch_admins"):
+                admin_coaches = await db.users.count_documents({
+                    "id": {"$in": branch["assignments"]["branch_admins"]},
+                    "role": {"$in": ["coach", "coach_admin"]},
+                    "is_active": True
+                })
+                coach_count += admin_coaches
+
+            # Count students - try multiple methods to find the correct field structure
+            branch_id = branch["id"]
+            student_count = 0
+
+            # Method 1: Try flat branch_id field
+            student_count = await db.users.count_documents({
+                "role": "student",
+                "branch_id": branch_id,
+                "is_active": True
+            })
+
+            # Method 2: If no results, try nested branch.branch_id field
+            if student_count == 0:
+                student_count = await db.users.count_documents({
+                    "role": "student",
+                    "branch.branch_id": branch_id,
+                    "is_active": True
+                })
+
+            # Method 3: If still no results, count unique students from enrollments
+            if student_count == 0:
+                pipeline = [
+                    {"$match": {"branch_id": branch_id, "is_active": True}},
+                    {"$group": {"_id": "$student_id"}},
+                    {"$count": "unique_students"}
+                ]
+                unique_students = await db.enrollments.aggregate(pipeline).to_list(length=1)
+                student_count = unique_students[0]["unique_students"] if unique_students else 0
+
+            # Add statistics to branch data
+            branch_with_stats = {
+                **branch,
+                "statistics": {
+                    "coach_count": coach_count,
+                    "student_count": student_count,
+                    "course_count": len(branch.get("operational_details", {}).get("courses_offered", [])),
+                    "active_courses": len(branch.get("assignments", {}).get("courses", []))
+                }
+            }
+            enhanced_branches.append(branch_with_stats)
+
+        return {"branches": serialize_doc(enhanced_branches)}
 
     @staticmethod
     async def get_branch(
         branch_id: str,
         current_user: dict = None
     ):
-        """Get branch by ID with nested structure"""
+        """Get branch by ID with nested structure and statistics"""
         if not current_user:
             raise HTTPException(status_code=401, detail="Authentication required")
-            
+
         db = get_db()
         branch = await db.branches.find_one({"id": branch_id})
         if not branch:
             raise HTTPException(status_code=404, detail="Branch not found")
-        # Return branch with the nested structure intact
-        return serialize_doc(branch)
+
+        # Count coaches assigned to this branch
+        coach_count = await db.coaches.count_documents({
+            "branch_id": branch_id,
+            "is_active": True
+        })
+
+        # Also count coaches assigned as managers or branch admins (if they exist in users collection)
+        # Count manager if assigned
+        if branch.get("manager_id"):
+            manager_exists = await db.users.count_documents({
+                "id": branch["manager_id"],
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            })
+            coach_count += manager_exists
+
+        # Count branch admins (coaches assigned as admins)
+        if branch.get("assignments", {}).get("branch_admins"):
+            admin_coaches = await db.users.count_documents({
+                "id": {"$in": branch["assignments"]["branch_admins"]},
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            })
+            coach_count += admin_coaches
+
+        # Count students - try multiple methods to find the correct field structure
+        student_count = 0
+
+        # Method 1: Try flat branch_id field
+        student_count = await db.users.count_documents({
+            "role": "student",
+            "branch_id": branch_id,
+            "is_active": True
+        })
+
+        # Method 2: If no results, try nested branch.branch_id field
+        if student_count == 0:
+            student_count = await db.users.count_documents({
+                "role": "student",
+                "branch.branch_id": branch_id,
+                "is_active": True
+            })
+
+        # Method 3: If still no results, count unique students from enrollments
+        if student_count == 0:
+            pipeline = [
+                {"$match": {"branch_id": branch_id, "is_active": True}},
+                {"$group": {"_id": "$student_id"}},
+                {"$count": "unique_students"}
+            ]
+            unique_students = await db.enrollments.aggregate(pipeline).to_list(length=1)
+            student_count = unique_students[0]["unique_students"] if unique_students else 0
+
+        # Add statistics to branch data
+        branch_with_stats = {
+            **branch,
+            "statistics": {
+                "coach_count": coach_count,
+                "student_count": student_count,
+                "course_count": len(branch.get("operational_details", {}).get("courses_offered", [])),
+                "active_courses": len(branch.get("assignments", {}).get("courses", []))
+            }
+        }
+
+        return serialize_doc(branch_with_stats)
+
+    @staticmethod
+    async def get_branch_stats(
+        branch_id: str,
+        current_user: dict = None
+    ):
+        """Get detailed statistics for a specific branch"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+        branch = await db.branches.find_one({"id": branch_id})
+        if not branch:
+            raise HTTPException(status_code=404, detail="Branch not found")
+
+        # Count coaches assigned to this branch
+        coach_count = 0
+        coach_details = []
+
+        # First, get coaches directly assigned to this branch from coaches collection
+        branch_coaches = await db.coaches.find({
+            "branch_id": branch_id,
+            "is_active": True
+        }).to_list(length=100)
+
+        coach_count += len(branch_coaches)
+        for coach in branch_coaches:
+            coach_details.append({
+                "id": coach["id"],
+                "name": coach.get("full_name", "Unknown"),
+                "role": "Coach",
+                "email": coach.get("email", coach.get("contact_info", {}).get("email", ""))
+            })
+
+        # Count manager if assigned (from users collection)
+        if branch.get("manager_id"):
+            manager = await db.users.find_one({
+                "id": branch["manager_id"],
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            })
+            if manager:
+                coach_count += 1
+                coach_details.append({
+                    "id": manager["id"],
+                    "name": manager.get("full_name", "Unknown"),
+                    "role": "Manager",
+                    "email": manager.get("email", manager.get("contact_info", {}).get("email", ""))
+                })
+
+        # Count branch admins (coaches assigned as admins from users collection)
+        if branch.get("assignments", {}).get("branch_admins"):
+            admin_coaches = await db.users.find({
+                "id": {"$in": branch["assignments"]["branch_admins"]},
+                "role": {"$in": ["coach", "coach_admin"]},
+                "is_active": True
+            }).to_list(length=100)
+
+            coach_count += len(admin_coaches)
+            for coach in admin_coaches:
+                coach_details.append({
+                    "id": coach["id"],
+                    "name": coach.get("full_name", "Unknown"),
+                    "role": "Branch Admin",
+                    "email": coach.get("email", coach.get("contact_info", {}).get("email", ""))
+                })
+
+        # Count students - try multiple methods to find the correct field structure
+        student_count = 0
+        students = []
+
+        # Method 1: Try flat branch_id field
+        students = await db.users.find({
+            "role": "student",
+            "branch_id": branch_id,
+            "is_active": True
+        }).to_list(length=1000)
+
+        # Method 2: If no results, try nested branch.branch_id field
+        if not students:
+            students = await db.users.find({
+                "role": "student",
+                "branch.branch_id": branch_id,
+                "is_active": True
+            }).to_list(length=1000)
+
+        student_count = len(students)
+
+        # Method 3: If still no results, get students from enrollments
+        if student_count == 0:
+            enrollments = await db.enrollments.find({
+                "branch_id": branch_id,
+                "is_active": True
+            }).to_list(length=1000)
+
+            # Get unique student IDs
+            student_ids = list(set([e["student_id"] for e in enrollments]))
+            if student_ids:
+                students = await db.users.find({
+                    "id": {"$in": student_ids},
+                    "role": "student",
+                    "is_active": True
+                }).to_list(length=1000)
+                student_count = len(students)
+
+        # Get course statistics
+        course_count = len(branch.get("operational_details", {}).get("courses_offered", []))
+        active_courses = len(branch.get("assignments", {}).get("courses", []))
+
+        # Get enrollment statistics
+        total_enrollments = await db.enrollments.count_documents({
+            "branch_id": branch_id,
+            "is_active": True
+        })
+
+        return {
+            "branch_id": branch_id,
+            "branch_name": branch.get("branch", {}).get("name", "Unknown"),
+            "statistics": {
+                "coach_count": coach_count,
+                "student_count": student_count,
+                "course_count": course_count,
+                "active_courses": active_courses,
+                "total_enrollments": total_enrollments
+            },
+            "coach_details": coach_details,
+            "student_details": [
+                {
+                    "id": student["id"],
+                    "name": student.get("full_name", "Unknown"),
+                    "email": student.get("email", student.get("contact_info", {}).get("email", "")),
+                    "enrollment_date": student.get("created_at", "")
+                } for student in students[:10]  # Limit to first 10 for performance
+            ]
+        }
 
     @staticmethod
     async def update_branch(
