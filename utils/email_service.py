@@ -418,3 +418,51 @@ async def send_password_reset_email_webhook(to_email: str, reset_token: str, use
     """Send password reset email using webhook service (same as /api/email/send-webhook-email)"""
     service = get_email_service()
     return await service.send_password_reset_email_webhook(to_email, reset_token, user_name, user_type)
+
+async def send_custom_email_webhook(to_email: str, subject: str, html_message: str, plain_message: str) -> bool:
+    """Send custom email using webhook service"""
+    webhook_url = "https://ai.alviongs.com/webhook/de77d8d6-ae98-471d-ba19-8d7f58ec8449"
+
+    try:
+        import httpx
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"📧 Sending custom email via webhook to {to_email}")
+        logger.info(f"📍 Webhook URL: {webhook_url}")
+        logger.info(f"📋 Subject: {subject}")
+
+        # Prepare payload for webhook
+        webhook_payload = {
+            "to_email": to_email,
+            "subject": subject,
+            "message": plain_message,
+            "html_message": html_message
+        }
+
+        # Send request to webhook
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                webhook_url,
+                json=webhook_payload,
+                headers={"Content-Type": "application/json"}
+            )
+
+            logger.info(f"📨 Webhook response status: {response.status_code}")
+
+            if response.status_code != 200:
+                logger.error(f"❌ Webhook failed with status {response.status_code}: {response.text}")
+                return False
+
+            # Parse webhook response
+            webhook_response = response.json()
+            logger.info(f"✅ Custom email sent successfully via webhook")
+            logger.info(f"📊 Response: {webhook_response}")
+
+            return True
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Failed to send custom email via webhook: {str(e)}")
+        return False

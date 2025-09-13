@@ -81,6 +81,15 @@ async def deactivate_coach(
     """Deactivate coach (Super Admin only)"""
     return await CoachController.deactivate_coach(coach_id, request, current_user)
 
+@router.post("/{coach_id}/send-credentials")
+async def send_coach_credentials(
+    coach_id: str,
+    request: Request,
+    current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))
+):
+    """Send login credentials to coach via email"""
+    return await CoachController.send_credentials_email(coach_id, request, current_user)
+
 @router.get("/stats/overview")
 async def get_coach_stats(
     current_user: dict = Depends(require_role_unified([UserRole.SUPER_ADMIN, UserRole.COACH_ADMIN]))

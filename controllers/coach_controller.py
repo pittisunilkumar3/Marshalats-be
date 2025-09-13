@@ -443,3 +443,168 @@ class CoachController:
             raise HTTPException(status_code=404, detail="Coach not found")
 
         return {"message": "Password has been reset successfully"}
+
+    @staticmethod
+    async def send_credentials_email(
+        coach_id: str,
+        request: Request,
+        current_admin: dict
+    ):
+        """Send login credentials to coach via email"""
+        db = get_db()
+
+        # Get coach details
+        coach = await db.coaches.find_one({"id": coach_id})
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+
+        # Get coach email
+        coach_email = coach.get("email") or coach.get("contact_info", {}).get("email")
+        if not coach_email:
+            raise HTTPException(status_code=400, detail="Coach email not found")
+
+        # Get coach name
+        coach_name = coach.get("full_name") or f"{coach.get('personal_info', {}).get('first_name', '')} {coach.get('personal_info', {}).get('last_name', '')}".strip()
+        if not coach_name:
+            coach_name = "Coach"
+
+        # Prepare email content
+        subject = "Your Coach Login Credentials - Marshalarts Academy"
+
+        # Create HTML email content (consistent with forgot password styling)
+        html_message = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coach Login Credentials</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+        .content {{ background-color: #ffffff; padding: 30px; border: 1px solid #e9ecef; }}
+        .footer {{ background-color: #f8f9fa; padding: 15px; text-align: center; border-radius: 0 0 8px 8px; font-size: 12px; color: #6c757d; }}
+        .btn {{ display: inline-block; padding: 12px 24px; background-color: #ea580c; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }}
+        .btn:hover {{ opacity: 0.9; }}
+        .info-box {{ background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+        .warning {{ background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+        .role-header {{ color: #ea580c; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="margin: 0; color: #ea580c;">🥋 Marshalarts Academy</h1>
+            <p style="margin: 5px 0 0 0; color: #666;">Coach Portal</p>
+        </div>
+
+        <div class="content">
+            <h2 class="role-header">Welcome to the Coach Portal!</h2>
+            <p>Hello <strong>{coach_name}</strong>,</p>
+
+            <p>Your coach account has been created successfully. You can now access the coach portal using your login credentials.</p>
+
+            <div class="info-box">
+                <p><strong>📧 Email:</strong> {coach_email}</p>
+                <p><strong>🔗 Login Portal:</strong></p>
+                <div style="text-align: center;">
+                    <a href="http://localhost:3022/coach/login" class="btn">Access Coach Portal</a>
+                </div>
+            </div>
+
+            <div class="warning">
+                <strong>🔒 Security Notice:</strong> For security reasons, your password is not included in this email. Please contact your administrator if you need password assistance.
+            </div>
+
+            <h3 style="color: #ea580c;">Next Steps:</h3>
+            <ul>
+                <li>Click the button above to access the coach portal</li>
+                <li>Log in with your email and password</li>
+                <li>Complete your profile setup</li>
+                <li>Review your assigned courses and schedules</li>
+            </ul>
+
+            <p>If you have any questions or need assistance, please contact our support team.</p>
+        </div>
+
+        <div class="footer">
+            <p style="margin: 0;">© 2025 Marshalarts Academy. All rights reserved.</p>
+            <p style="margin: 5px 0 0 0;">This is an automated message, please do not reply.</p>
+        </div>
+    </div>
+</body>
+</html>""".strip()
+
+        # Plain text version (consistent with forgot password format)
+        plain_message = f"""🥋 Welcome to Marshalarts Academy - Coach Portal
+
+Hello {coach_name},
+
+Your coach account has been created successfully. You can now access the coach portal using your login credentials.
+
+📧 Email: {coach_email}
+🔗 Login URL: http://localhost:3022/coach/login
+
+🔒 SECURITY NOTICE: For security reasons, your password is not included in this email. Please contact your administrator if you need password assistance.
+
+Next Steps:
+- Visit the coach portal using the link above
+- Log in with your email and password
+- Complete your profile setup
+- Review your assigned courses and schedules
+
+If you have any questions or need assistance, please contact our support team.
+
+Best regards,
+Marshalarts Academy Team
+
+© 2025 Marshalarts Academy. All rights reserved.
+This is an automated message, please do not reply.""".strip()
+
+        try:
+            # Send email using custom webhook service (same as forgot password implementation)
+            from utils.email_service import send_custom_email_webhook
+            email_sent = await send_custom_email_webhook(
+                coach_email,
+                subject,
+                html_message,
+                plain_message
+            )
+
+            # Log the credentials email attempt (same as forgot password implementation)
+            import logging
+            logging.info(f"Coach credentials email requested for {coach_email}. Email sent: {email_sent}")
+
+            # Log the activity in database
+            await log_activity(
+                db,
+                user_id=current_admin.get("id"),
+                action="send_coach_credentials",
+                details=f"Sent login credentials to coach {coach_name} ({coach_email})",
+                ip_address=request.client.host if request.client else "unknown"
+            )
+
+            # Prepare response (consistent with forgot password format)
+            response = {
+                "message": "Login credentials have been sent to the coach's email address",
+                "email_sent": email_sent,
+                "coach_email": coach_email
+            }
+
+            # Include additional info for testing purposes (same as forgot password implementation)
+            import os
+            if os.environ.get("TESTING") == "True":
+                response["coach_id"] = coach_id
+                response["coach_name"] = coach_name
+
+            return response
+
+        except Exception as e:
+            # Enhanced error logging (consistent with forgot password implementation)
+            import logging
+            logging.error(f"Failed to send coach credentials email to {coach_email}: {str(e)}")
+
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send credentials email: {str(e)}"
+            )
