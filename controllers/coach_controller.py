@@ -450,7 +450,7 @@ class CoachController:
         request: Request,
         current_admin: dict
     ):
-        """Send login credentials to coach via email"""
+        """Send login credentials to coach via email with secure password reset token"""
         db = get_db()
 
         # Get coach details
@@ -467,6 +467,15 @@ class CoachController:
         coach_name = coach.get("full_name") or f"{coach.get('personal_info', {}).get('first_name', '')} {coach.get('personal_info', {}).get('last_name', '')}".strip()
         if not coach_name:
             coach_name = "Coach"
+
+        # Generate a password reset token for secure access (same as forgot password)
+        reset_token = create_access_token(
+            data={"sub": coach["id"], "scope": "password_reset"},
+            expires_delta=timedelta(minutes=15)
+        )
+
+        # Create password reset link
+        reset_link = f"http://localhost:3022/coach/reset-password?token={reset_token}"
 
         # Prepare email content
         subject = "Your Coach Login Credentials - Marshalarts Academy"
@@ -506,23 +515,25 @@ class CoachController:
 
             <div class="info-box">
                 <p><strong>📧 Email:</strong> {coach_email}</p>
-                <p><strong>🔗 Login Portal:</strong></p>
+                <p><strong>🔑 Password Setup:</strong> Click the button below to set up your password securely</p>
                 <div style="text-align: center;">
-                    <a href="http://localhost:3022/coach/login" class="btn">Access Coach Portal</a>
+                    <a href="{reset_link}" class="btn">Set Up Your Password</a>
                 </div>
             </div>
 
             <div class="warning">
-                <strong>🔒 Security Notice:</strong> For security reasons, your password is not included in this email. Please contact your administrator if you need password assistance.
+                <strong>🔒 Security Notice:</strong> This password setup link will expire in 15 minutes for security. After setting your password, you can log in at the coach portal.
             </div>
 
             <h3 style="color: #ea580c;">Next Steps:</h3>
             <ul>
-                <li>Click the button above to access the coach portal</li>
-                <li>Log in with your email and password</li>
-                <li>Complete your profile setup</li>
-                <li>Review your assigned courses and schedules</li>
+                <li><strong>Step 1:</strong> Click "Set Up Your Password" button above</li>
+                <li><strong>Step 2:</strong> Create a secure password for your account</li>
+                <li><strong>Step 3:</strong> Visit the <a href="http://localhost:3022/coach/login" style="color: #ea580c;">Coach Portal</a> to log in</li>
+                <li><strong>Step 4:</strong> Complete your profile setup and review your assigned courses</li>
             </ul>
+
+            <p><strong>Important:</strong> The password setup link expires in 15 minutes. If it expires, please contact your administrator for a new link.</p>
 
             <p>If you have any questions or need assistance, please contact our support team.</p>
         </div>
@@ -540,18 +551,21 @@ class CoachController:
 
 Hello {coach_name},
 
-Your coach account has been created successfully. You can now access the coach portal using your login credentials.
+Your coach account has been created successfully. You can now set up your password and access the coach portal.
 
 📧 Email: {coach_email}
-🔗 Login URL: http://localhost:3022/coach/login
+🔑 Password Setup: {reset_link}
+🔗 Coach Portal: http://localhost:3022/coach/login
 
-🔒 SECURITY NOTICE: For security reasons, your password is not included in this email. Please contact your administrator if you need password assistance.
+🔒 SECURITY NOTICE: The password setup link above will expire in 15 minutes for security. After setting your password, you can log in at the coach portal.
 
 Next Steps:
-- Visit the coach portal using the link above
-- Log in with your email and password
-- Complete your profile setup
-- Review your assigned courses and schedules
+1. Click the password setup link above
+2. Create a secure password for your account
+3. Visit the Coach Portal to log in with your email and new password
+4. Complete your profile setup and review your assigned courses
+
+IMPORTANT: The password setup link expires in 15 minutes. If it expires, please contact your administrator for a new link.
 
 If you have any questions or need assistance, please contact our support team.
 
@@ -577,11 +591,16 @@ This is an automated message, please do not reply.""".strip()
 
             # Log the activity in database
             await log_activity(
-                db,
-                user_id=current_admin.get("id"),
+                request=request,
                 action="send_coach_credentials",
-                details=f"Sent login credentials to coach {coach_name} ({coach_email})",
-                ip_address=request.client.host if request.client else "unknown"
+                user_id=current_admin.get("id"),
+                user_name=current_admin.get("full_name", "Admin"),
+                details={
+                    "coach_id": coach_id,
+                    "coach_name": coach_name,
+                    "coach_email": coach_email,
+                    "email_sent": email_sent
+                }
             )
 
             # Prepare response (consistent with forgot password format)
@@ -596,6 +615,8 @@ This is an automated message, please do not reply.""".strip()
             if os.environ.get("TESTING") == "True":
                 response["coach_id"] = coach_id
                 response["coach_name"] = coach_name
+                response["reset_token"] = reset_token
+                response["reset_link"] = reset_link
 
             return response
 
