@@ -5,6 +5,7 @@ import secrets
 import uuid
 
 from models.coach_models import CoachCreate, CoachUpdate, Coach, CoachResponse, CoachLogin, CoachLoginResponse
+from models.user_models import UserRole
 from utils.auth import hash_password, verify_password, create_access_token, SECRET_KEY, ALGORITHM
 from utils.database import get_db
 from utils.helpers import serialize_doc, log_activity, send_sms, send_whatsapp
@@ -314,14 +315,162 @@ class CoachController:
         return {"message": "Coach deactivated successfully"}
 
     @staticmethod
+    async def get_coach_courses(coach_id: str, current_user: dict = None):
+        """Get courses assigned to a specific coach"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Verify coach exists
+        coach = await db.coaches.find_one({"id": coach_id})
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+
+        # Permission check: coaches can only view their own courses unless admin
+        if current_user["role"] == UserRole.COACH and current_user["id"] != coach_id:
+            raise HTTPException(status_code=403, detail="You can only view your own course assignments")
+
+        try:
+            # Get courses where this coach is the instructor
+            courses = await db.courses.find({
+                "instructor_id": coach_id,
+                "settings.active": True
+            }).to_list(length=100)
+
+            # Also get courses from coach's assignment_details
+            assigned_course_ids = coach.get("assignment_details", {}).get("courses", [])
+            if assigned_course_ids:
+                assigned_courses = await db.courses.find({
+                    "id": {"$in": assigned_course_ids},
+                    "settings.active": True
+                }).to_list(length=100)
+
+                # Merge courses (avoid duplicates)
+                course_ids_seen = {course["id"] for course in courses}
+                for assigned_course in assigned_courses:
+                    if assigned_course["id"] not in course_ids_seen:
+                        courses.append(assigned_course)
+
+            # Enhance courses with additional data
+            enhanced_courses = []
+            for course in courses:
+                # Get enrollment count for this course
+                enrollment_count = await db.enrollments.count_documents({
+                    "course_id": course["id"],
+                    "is_active": True
+                })
+
+                # Get branch information
+                branches = await db.branches.find({
+                    "assignments.courses": course["id"],
+                    "is_active": True
+                }).to_list(length=10)
+
+                enhanced_course = serialize_doc(course)
+                enhanced_course.update({
+                    "name": course.get("title", course.get("name", "Unknown Course")),
+                    "enrolled_students": enrollment_count,
+                    "difficulty_level": course.get("difficulty_level", "Beginner"),
+                    "branch_assignments": [
+                        {
+                            "branch_id": branch["id"],
+                            "branch_name": branch["branch"]["name"]
+                        }
+                        for branch in branches
+                    ]
+                })
+                enhanced_courses.append(enhanced_course)
+
+            return {"courses": enhanced_courses, "total": len(enhanced_courses)}
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching coach courses: {str(e)}")
+
+    @staticmethod
+    async def get_coach_students(coach_id: str, current_user: dict = None):
+        """Get students enrolled in courses taught by a specific coach"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Verify coach exists
+        coach = await db.coaches.find_one({"id": coach_id})
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+
+        # Permission check: coaches can only view their own students unless admin
+        if current_user["role"] == UserRole.COACH and current_user["id"] != coach_id:
+            raise HTTPException(status_code=403, detail="You can only view your own students")
+
+        try:
+            # Get courses taught by this coach
+            course_ids = []
+
+            # Get courses where this coach is the instructor
+            instructor_courses = await db.courses.find({
+                "instructor_id": coach_id,
+                "settings.active": True
+            }).to_list(length=100)
+            course_ids.extend([course["id"] for course in instructor_courses])
+
+            # Also get courses from coach's assignment_details
+            assigned_course_ids = coach.get("assignment_details", {}).get("courses", [])
+            course_ids.extend(assigned_course_ids)
+
+            # Remove duplicates
+            course_ids = list(set(course_ids))
+
+            if not course_ids:
+                return {"students": [], "total": 0}
+
+            # Get enrollments for these courses
+            enrollments = await db.enrollments.find({
+                "course_id": {"$in": course_ids},
+                "is_active": True
+            }).to_list(length=1000)
+
+            # Get student details and course information
+            enhanced_students = []
+            for enrollment in enrollments:
+                # Get student details
+                student = await db.users.find_one({
+                    "id": enrollment["student_id"],
+                    "role": "student"
+                })
+
+                # Get course details
+                course = await db.courses.find_one({"id": enrollment["course_id"]})
+
+                if student and course:
+                    enhanced_student = {
+                        "id": student["id"],
+                        "student_name": student.get("full_name", f"{student.get('first_name', '')} {student.get('last_name', '')}".strip()),
+                        "email": student.get("email", student.get("contact_info", {}).get("email", "")),
+                        "course_id": course["id"],
+                        "course_name": course.get("title", course.get("name", "Unknown Course")),
+                        "enrollment_date": enrollment.get("enrollment_date", enrollment.get("created_at", "")),
+                        "status": "active" if enrollment.get("is_active", True) else "inactive",
+                        "progress": enrollment.get("progress", 0),
+                        "branch_id": enrollment.get("branch_id", "")
+                    }
+                    enhanced_students.append(enhanced_student)
+
+            return {"students": enhanced_students, "total": len(enhanced_students)}
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching coach students: {str(e)}")
+
+    @staticmethod
     async def get_coach_stats():
         """Get coach statistics"""
         db = get_db()
-        
+
         total_coaches = await db.coaches.count_documents({})
         active_coaches = await db.coaches.count_documents({"is_active": True})
         inactive_coaches = total_coaches - active_coaches
-        
+
         # Get coaches by expertise areas
         pipeline = [
             {"$unwind": "$areas_of_expertise"},
@@ -329,7 +478,7 @@ class CoachController:
             {"$sort": {"count": -1}}
         ]
         expertise_stats = await db.coaches.aggregate(pipeline).to_list(length=None)
-        
+
         return {
             "total_coaches": total_coaches,
             "active_coaches": active_coaches,
