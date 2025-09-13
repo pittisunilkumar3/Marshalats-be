@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script to create a valid JWT token and test the enhanced courses API
+Test script to verify authenticated courses endpoint
 """
 
 import asyncio
@@ -10,7 +10,7 @@ import requests
 from datetime import datetime, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 
-# JWT settings (matching auth.py)
+# JWT settings
 SECRET_KEY = os.environ.get('SECRET_KEY', 'student_management_secret_key_2025')
 ALGORITHM = "HS256"
 
@@ -34,18 +34,27 @@ async def get_existing_user():
     client.close()
 
     if user:
-        print(f"Found user: {user.get('email')} (Active: {user.get('is_active')})")
         return user["id"], user["email"]
     return None, None
 
-def test_courses_api():
-    """Test the enhanced courses API"""
-    print("🧪 Testing Enhanced Courses API")
+async def test_authenticated_courses():
+    """Test the authenticated courses API"""
+    print("🧪 Testing Authenticated Courses API")
     print("=" * 40)
 
+    # Get user and create token
+    user_id, email = await get_existing_user()
+    if not user_id:
+        print("❌ No super admin user found")
+        return
+
+    token = create_test_token(user_id, "super_admin")
+    print(f"✅ Created token for user: {email}")
+
     try:
-        print("\n📡 Testing /api/courses/public/all endpoint...")
-        response = requests.get("http://localhost:8003/api/courses/public/all")
+        print("\n📡 Testing /api/courses endpoint (authenticated)...")
+        headers = {"Authorization": f"Bearer {token}"}
+        response = requests.get("http://localhost:8003/api/courses", headers=headers)
 
         if response.status_code == 200:
             data = response.json()
@@ -61,22 +70,13 @@ def test_courses_api():
                 print(f"   Branches: {course.get('branches', 'N/A')}")
                 print(f"   Masters: {course.get('masters', 'N/A')}")
                 print(f"   Students: {course.get('students', 'N/A')}")
-                print(f"   Icon: {course.get('icon', 'N/A')}")
-                print(f"   Enabled: {course.get('enabled', 'N/A')}")
-                print(f"   Branch assignments: {len(course.get('branch_assignments', []))}")
                 print(f"   Instructor assignments: {len(course.get('instructor_assignments', []))}")
                 print(f"   Student enrollment count: {course.get('student_enrollment_count', 'N/A')}")
 
-                # Show branch assignments if any
-                if course.get('branch_assignments'):
-                    print(f"   Branch details:")
-                    for branch in course.get('branch_assignments', [])[:3]:  # Show first 3
-                        print(f"     - {branch.get('branch_name')} ({branch.get('location')})")
-
-                # Show instructor assignments if any
+                # Show instructor details
                 if course.get('instructor_assignments'):
-                    print(f"   Instructor details:")
-                    for instructor in course.get('instructor_assignments', [])[:3]:  # Show first 3
+                    print(f"   Assigned instructors:")
+                    for instructor in course.get('instructor_assignments', []):
                         print(f"     - {instructor.get('instructor_name')} ({instructor.get('email')})")
         else:
             print(f"❌ API call failed: {response.status_code}")
@@ -86,4 +86,4 @@ def test_courses_api():
         print(f"❌ Error testing API: {e}")
 
 if __name__ == "__main__":
-    test_courses_api()
+    asyncio.run(test_authenticated_courses())

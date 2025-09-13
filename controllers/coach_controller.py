@@ -50,6 +50,9 @@ class CoachController:
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
         
+        # Import AssignmentDetails for default creation
+        from models.coach_models import AssignmentDetails, EmergencyContact
+
         # Create coach object
         coach = Coach(
             personal_info=coach_data.personal_info,
@@ -58,6 +61,8 @@ class CoachController:
             professional_info=coach_data.professional_info,
             areas_of_expertise=coach_data.areas_of_expertise,
             branch_id=coach_data.branch_id,  # Include branch assignment
+            assignment_details=coach_data.assignment_details or AssignmentDetails(),  # Ensure assignment_details exists
+            emergency_contact=coach_data.emergency_contact or EmergencyContact(),  # Ensure emergency_contact exists
             email=coach_data.contact_info.email,
             phone=full_phone,
             first_name=coach_data.personal_info.first_name,
@@ -133,6 +138,8 @@ class CoachController:
                 professional_info=coach["professional_info"],
                 areas_of_expertise=coach["areas_of_expertise"],
                 branch_id=coach.get("branch_id"),  # Include branch assignment
+                assignment_details=coach.get("assignment_details"),  # Include course assignments
+                emergency_contact=coach.get("emergency_contact"),  # Include emergency contact
                 full_name=coach["full_name"],
                 is_active=coach["is_active"],
                 created_at=coach["created_at"],
@@ -167,6 +174,8 @@ class CoachController:
             professional_info=coach["professional_info"],
             areas_of_expertise=coach["areas_of_expertise"],
             branch_id=coach.get("branch_id"),  # Include branch assignment
+            assignment_details=coach.get("assignment_details"),  # Include course assignments
+            emergency_contact=coach.get("emergency_contact"),  # Include emergency contact
             full_name=coach["full_name"],
             is_active=coach["is_active"],
             created_at=coach["created_at"],
@@ -241,6 +250,12 @@ class CoachController:
 
         if coach_update.branch_id is not None:  # Allow setting to None to remove branch assignment
             update_data["branch_id"] = coach_update.branch_id
+
+        if coach_update.assignment_details is not None:  # Allow updating course assignments
+            update_data["assignment_details"] = coach_update.assignment_details.dict()
+
+        if coach_update.emergency_contact is not None:  # Allow updating emergency contact
+            update_data["emergency_contact"] = coach_update.emergency_contact.dict()
 
         if not update_data:
             raise HTTPException(status_code=400, detail="No update data provided")

@@ -4,6 +4,18 @@ from typing import List, Optional
 from enum import Enum
 import uuid
 
+# Assignment details for coaches
+class AssignmentDetails(BaseModel):
+    courses: List[str] = Field(default_factory=list)  # List of course IDs assigned to the coach
+    salary: Optional[float] = None  # Coach's salary
+    join_date: Optional[str] = None  # Date when coach joined (ISO format)
+
+# Emergency contact information
+class EmergencyContact(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    relationship: Optional[str] = None
+
 class PersonalInfo(BaseModel):
     first_name: str
     last_name: str
@@ -37,6 +49,8 @@ class CoachCreate(BaseModel):
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
     branch_id: Optional[str] = None  # Branch assignment for the coach
+    assignment_details: Optional[AssignmentDetails] = None  # Course assignments and other details
+    emergency_contact: Optional[EmergencyContact] = None  # Emergency contact information
 
 class CoachUpdate(BaseModel):
     personal_info: Optional[PersonalInfo] = None
@@ -45,6 +59,8 @@ class CoachUpdate(BaseModel):
     professional_info: Optional[ProfessionalInfo] = None
     areas_of_expertise: Optional[List[str]] = None
     branch_id: Optional[str] = None  # Branch assignment for the coach
+    assignment_details: Optional[AssignmentDetails] = None  # Course assignments and other details
+    emergency_contact: Optional[EmergencyContact] = None  # Emergency contact information
 
 class CoachLogin(BaseModel):
     email: EmailStr
@@ -64,6 +80,8 @@ class Coach(BaseModel):
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
     branch_id: Optional[str] = None  # Branch assignment for the coach
+    assignment_details: Optional[AssignmentDetails] = None  # Course assignments and other details
+    emergency_contact: Optional[EmergencyContact] = None  # Emergency contact information
     # Basic user fields for authentication and identification
     email: EmailStr  # Duplicate from contact_info for easy access
     phone: str  # Full phone with country code
@@ -84,6 +102,8 @@ class CoachResponse(BaseModel):
     professional_info: ProfessionalInfo
     areas_of_expertise: List[str]
     branch_id: Optional[str] = None  # Branch assignment for the coach
+    assignment_details: Optional[AssignmentDetails] = None  # Course assignments and other details
+    emergency_contact: Optional[EmergencyContact] = None  # Emergency contact information
     full_name: str
     is_active: bool
     created_at: datetime

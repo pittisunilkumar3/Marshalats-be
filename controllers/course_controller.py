@@ -65,9 +65,9 @@ class CourseController:
             }).to_list(length=100)
 
             # Get instructor assignments (coaches assigned to this course)
-            # For now, we'll get all coaches and filter later when we have proper course assignments
-            instructors = await db.users.find({
-                "role": {"$in": ["coach", "coach_admin"]},
+            # Query coaches collection for coaches assigned to this specific course
+            instructors = await db.coaches.find({
+                "assignment_details.courses": course["id"],
                 "is_active": True
             }).to_list(length=100)
 
@@ -93,8 +93,8 @@ class CourseController:
                 "instructor_assignments": [
                     {
                         "instructor_id": instructor["id"],
-                        "instructor_name": f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip(),
-                        "email": instructor.get("email", "")
+                        "instructor_name": instructor.get("full_name", f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip()),
+                        "email": instructor.get("email", instructor.get("contact_info", {}).get("email", ""))
                     }
                     for instructor in instructors
                 ],
@@ -247,8 +247,9 @@ class CourseController:
             }).to_list(length=100)
 
             # Get instructor assignments (coaches assigned to this course)
-            instructors = await db.users.find({
-                "role": {"$in": ["coach", "coach_admin"]},
+            # Query coaches collection for coaches assigned to this specific course
+            instructors = await db.coaches.find({
+                "assignment_details.courses": course["id"],
                 "is_active": True
             }).to_list(length=100)
 
@@ -274,8 +275,8 @@ class CourseController:
                 "instructor_assignments": [
                     {
                         "instructor_id": instructor["id"],
-                        "instructor_name": f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip(),
-                        "email": instructor.get("email", "")
+                        "instructor_name": instructor.get("full_name", f"{instructor.get('first_name', '')} {instructor.get('last_name', '')}".strip()),
+                        "email": instructor.get("email", instructor.get("contact_info", {}).get("email", ""))
                     }
                     for instructor in instructors
                 ],
