@@ -48,30 +48,100 @@ class UserController:
         # Generate password if not provided
         if not user_data.password:
             user_data.password = secrets.token_urlsafe(8)
-        
+
         hashed_password = hash_password(user_data.password)
-        user = BaseUser(**user_data.dict())
-        user_dict = user.dict()
-        user_dict["password"] = hashed_password
 
-        # Handle date serialization for MongoDB compatibility
-        if "date_of_birth" in user_dict and isinstance(user_dict["date_of_birth"], date):
-            user_dict["date_of_birth"] = user_dict["date_of_birth"].isoformat()
+        # Generate full name from first and last name
+        full_name = f"{user_data.first_name} {user_data.last_name}".strip()
 
-        await get_db().users.insert_one(user_dict)
+        # Create user dictionary with proper structure (similar to registration API)
+        user_dict = {
+            "id": str(uuid.uuid4()),
+            "email": user_data.email,
+            "phone": user_data.phone,
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "full_name": full_name,
+            "role": user_data.role.value,  # Convert enum to string
+            "biometric_id": user_data.biometric_id,
+            "is_active": True,
+            "date_of_birth": user_data.date_of_birth.isoformat() if user_data.date_of_birth else None,
+            "gender": user_data.gender,
+            "password": hashed_password,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+
+        # Set branch_id for staff members
+        if user_data.branch_id:
+            user_dict["branch_id"] = user_data.branch_id
+
+        # BACKWARD COMPATIBILITY: Store course and branch data in user document
+        # This ensures existing frontend integrations continue to work
+        if user_data.course:
+            user_dict["course"] = {
+                "category_id": user_data.course.category_id,
+                "course_id": user_data.course.course_id,
+                "duration": user_data.course.duration
+            }
+
+        if user_data.branch:
+            user_dict["branch"] = {
+                "location_id": user_data.branch.location_id,
+                "branch_id": user_data.branch.branch_id
+            }
+            # Also set branch_id for easier querying
+            if not user_dict.get("branch_id"):
+                user_dict["branch_id"] = user_data.branch.branch_id
+
+        await db.users.insert_one(user_dict)
+
+        # Create enrollment record if course information is provided (for students)
+        enrollment_id = None
+        if user_data.course and user_data.branch and user_data.role == UserRole.STUDENT:
+            try:
+                from models.enrollment_models import Enrollment, PaymentStatus
+                from datetime import timedelta
+
+                # Create enrollment record in the proper collection
+                enrollment = Enrollment(
+                    student_id=user_dict["id"],
+                    course_id=user_data.course.course_id,
+                    branch_id=user_data.branch.branch_id,
+                    start_date=datetime.utcnow(),
+                    end_date=datetime.utcnow() + timedelta(days=365),  # Default 1 year
+                    fee_amount=0.0,  # Will be updated when payment is processed
+                    admission_fee=0.0,  # Will be updated when payment is processed
+                    payment_status=PaymentStatus.PENDING,
+                    enrollment_date=datetime.utcnow(),
+                    is_active=True
+                )
+
+                enrollment_result = await db.enrollments.insert_one(enrollment.dict())
+                enrollment_id = enrollment.id
+
+            except Exception as e:
+                # Log error but don't fail the user creation if enrollment creation fails
+                print(f"❌ Error creating enrollment record: {e}")
+                pass
         
         # Send credentials
-        await send_sms(user.phone, f"Account created. Email: {user.email}, Password: {user_data.password}")
-        
+        await send_sms(user_dict["phone"], f"Account created. Email: {user_dict['email']}, Password: {user_data.password}")
+
         await log_activity(
             request=request,
             action="admin_create_user",
             user_id=current_user["id"],
             user_name=current_user["full_name"],
-            details={"created_user_id": user.id, "created_user_email": user.email, "role": user.role}
+            details={"created_user_id": user_dict["id"], "created_user_email": user_dict["email"], "role": user_dict["role"]}
         )
 
-        return {"message": "User created successfully", "user_id": user.id}
+        response_data = {"message": "User created successfully", "user_id": user_dict["id"]}
+        if enrollment_id:
+            response_data["enrollment_id"] = enrollment_id
+            response_data["message"] = "User created and enrolled successfully"
+
+        return response_data
 
     @staticmethod
     async def get_users(
@@ -171,10 +241,114 @@ class UserController:
         user["date_of_birth"] = user.get("date_of_birth")
         user["gender"] = user.get("gender")
 
+        # For students, also fetch enrollment data to provide complete course information
+        enrollments = []
+        if user.get("role") == "student":
+            try:
+                enrollments = await db.enrollments.find({
+                    "student_id": user_id,
+                    "is_active": True
+                }).to_list(100)
+
+                # Enrich enrollment data with course and branch details
+                for enrollment in enrollments:
+                    # Get course details
+                    course = await db.courses.find_one({"id": enrollment["course_id"]})
+                    if course:
+                        enrollment["course_details"] = {
+                            "id": course["id"],
+                            "title": course.get("title", "Unknown Course"),
+                            "category_id": course.get("category_id"),
+                            "difficulty_level": course.get("difficulty_level", "Beginner")
+                        }
+
+                    # Get branch details
+                    branch = await db.branches.find_one({"id": enrollment["branch_id"]})
+                    if branch:
+                        enrollment["branch_details"] = {
+                            "id": branch["id"],
+                            "name": branch.get("branch", {}).get("name", "Unknown Branch"),
+                            "location_id": branch.get("branch", {}).get("address", {}).get("city", "")
+                        }
+
+            except Exception as e:
+                print(f"Error fetching enrollment data for user {user_id}: {e}")
+                # Don't fail the request if enrollment fetch fails
+
         return {
             "user": serialize_doc(user),
+            "enrollments": serialize_doc(enrollments),
             "message": "User retrieved successfully"
         }
+
+    @staticmethod
+    async def handle_enrollment_updates(user_id: str, course_data: dict, branch_data: dict):
+        """Handle enrollment record updates when course/branch data changes"""
+        db = get_db()
+
+        try:
+            # Check if user has existing active enrollments
+            existing_enrollments = await db.enrollments.find({
+                "student_id": user_id,
+                "is_active": True
+            }).to_list(100)
+
+            if course_data and branch_data:
+                course_id = course_data.get("course_id")
+                branch_id = branch_data.get("branch_id")
+
+                if course_id and branch_id:
+                    # Check if enrollment already exists for this course/branch combination
+                    existing_enrollment = None
+                    for enrollment in existing_enrollments:
+                        if (enrollment.get("course_id") == course_id and
+                            enrollment.get("branch_id") == branch_id):
+                            existing_enrollment = enrollment
+                            break
+
+                    if existing_enrollment:
+                        # Update existing enrollment
+                        await db.enrollments.update_one(
+                            {"id": existing_enrollment["id"]},
+                            {"$set": {
+                                "updated_at": datetime.utcnow(),
+                                "is_active": True
+                            }}
+                        )
+                        print(f"✅ Updated existing enrollment: {existing_enrollment['id']}")
+                    else:
+                        # Create new enrollment record
+                        from models.enrollment_models import Enrollment, PaymentStatus
+                        from datetime import timedelta
+
+                        enrollment = Enrollment(
+                            student_id=user_id,
+                            course_id=course_id,
+                            branch_id=branch_id,
+                            start_date=datetime.utcnow(),
+                            end_date=datetime.utcnow() + timedelta(days=365),
+                            fee_amount=0.0,
+                            admission_fee=0.0,
+                            payment_status=PaymentStatus.PENDING,
+                            enrollment_date=datetime.utcnow(),
+                            is_active=True
+                        )
+
+                        await db.enrollments.insert_one(enrollment.dict())
+                        print(f"✅ Created new enrollment: {enrollment.id}")
+
+                        # Deactivate other enrollments for this student
+                        for old_enrollment in existing_enrollments:
+                            if old_enrollment["id"] != enrollment.id:
+                                await db.enrollments.update_one(
+                                    {"id": old_enrollment["id"]},
+                                    {"$set": {"is_active": False, "updated_at": datetime.utcnow()}}
+                                )
+                                print(f"✅ Deactivated old enrollment: {old_enrollment['id']}")
+
+        except Exception as e:
+            print(f"❌ Error handling enrollment updates: {e}")
+            # Don't fail the user update if enrollment handling fails
 
     @staticmethod
     async def update_user(
@@ -259,12 +433,21 @@ class UserController:
             raise HTTPException(status_code=400, detail="No update data provided")
 
         update_data["updated_at"] = datetime.utcnow()
-        
+
+        # Handle enrollment updates if course/branch data is being changed
+        if target_user.get("role") == "student" and ("course" in update_data or "branch" in update_data):
+            course_data = update_data.get("course", {})
+            branch_data = update_data.get("branch", {})
+
+            # Only handle enrollment if both course and branch data are provided
+            if course_data and branch_data:
+                await UserController.handle_enrollment_updates(user_id, course_data, branch_data)
+
         result = await get_db().users.update_one(
             {"id": user_id},
             {"$set": update_data}
         )
-        
+
         if result.matched_count == 0:
             # This case should be rare due to the check above, but it's good practice
             raise HTTPException(status_code=404, detail="User not found")
@@ -492,7 +675,8 @@ class UserController:
                         "payment_status": enrollment.get("payment_status", "pending")
                     })
 
-            # Method 2: Check for course info directly in user model (for students created via registration)
+            # DEPRECATED: Legacy fallback for students with course data in user documents
+            # This will be removed after data migration is complete
             if not courses_info and student.get("course"):
                 course_info = student["course"]
                 branch_info = student.get("branch", {})
@@ -525,7 +709,8 @@ class UserController:
                         "level": course.get("difficulty_level", "Beginner"),
                         "duration": duration_name,
                         "enrollment_date": student.get("created_at"),
-                        "payment_status": "paid"  # Assume paid for registration-based students
+                        "payment_status": "paid",  # Assume paid for registration-based students
+                        "source": "legacy_user_document"  # Mark as legacy data for migration tracking
                     })
 
             # Prepare student details response

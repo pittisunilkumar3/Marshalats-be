@@ -204,3 +204,70 @@ class EnrollmentController:
         await send_whatsapp(student["phone"], f"Welcome! You're enrolled in {course['name']}. Start date: {enrollment_data.start_date.date()}")
 
         return {"message": "Enrollment created successfully", "enrollment_id": enrollment.id}
+
+    @staticmethod
+    async def get_student_enrollments(
+        student_id: str,
+        current_user: dict = None,
+        active_only: bool = True
+    ):
+        """Get all enrollments for a specific student - for dashboard edit page"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Role-based access control
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid user role")
+
+        # Students can only view their own enrollments
+        if current_role == UserRole.STUDENT and current_user["id"] != student_id:
+            raise HTTPException(status_code=403, detail="You can only view your own enrollments")
+
+        # Coach Admin and Coach can only view enrollments from their own branch
+        if current_role in [UserRole.COACH_ADMIN, UserRole.COACH]:
+            student = await db.users.find_one({"id": student_id})
+            if not student:
+                raise HTTPException(status_code=404, detail="Student not found")
+
+            if current_user.get("branch_id") != student.get("branch_id"):
+                raise HTTPException(status_code=403, detail="You can only view enrollments from your own branch")
+
+        # Build query
+        query = {"student_id": student_id}
+        if active_only:
+            query["is_active"] = True
+
+        enrollments = await db.enrollments.find(query).to_list(100)
+
+        # Enrich enrollment data with course and branch details
+        for enrollment in enrollments:
+            # Get course details
+            course = await db.courses.find_one({"id": enrollment["course_id"]})
+            if course:
+                enrollment["course_details"] = {
+                    "id": course["id"],
+                    "title": course.get("title", "Unknown Course"),
+                    "category_id": course.get("category_id"),
+                    "difficulty_level": course.get("difficulty_level", "Beginner"),
+                    "description": course.get("description", "")
+                }
+
+            # Get branch details
+            branch = await db.branches.find_one({"id": enrollment["branch_id"]})
+            if branch:
+                enrollment["branch_details"] = {
+                    "id": branch["id"],
+                    "name": branch.get("branch", {}).get("name", "Unknown Branch"),
+                    "location": branch.get("branch", {}).get("address", {}).get("city", ""),
+                    "location_id": branch.get("branch", {}).get("address", {}).get("location_id", "")
+                }
+
+        return {
+            "enrollments": serialize_doc(enrollments),
+            "count": len(enrollments),
+            "message": "Enrollments retrieved successfully"
+        }

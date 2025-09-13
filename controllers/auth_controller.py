@@ -54,34 +54,69 @@ class AuthController:
             "updated_at": datetime.utcnow()
         }
         
-        # Add nested course object if provided
+        # Set branch_id for staff members
+        if user_data.branch_id:
+            user_dict["branch_id"] = user_data.branch_id
+
+        # BACKWARD COMPATIBILITY: Store course and branch data in user document
+        # This ensures existing frontend integrations continue to work
         if user_data.course:
             user_dict["course"] = {
                 "category_id": user_data.course.category_id,
                 "course_id": user_data.course.course_id,
                 "duration": user_data.course.duration
             }
-        
-        # Add nested branch object if provided
+
         if user_data.branch:
             user_dict["branch"] = {
                 "location_id": user_data.branch.location_id,
                 "branch_id": user_data.branch.branch_id
             }
-        
+            # Also set branch_id for easier querying
+            if not user_dict.get("branch_id"):
+                user_dict["branch_id"] = user_data.branch.branch_id
+
         result = await db.users.insert_one(user_dict)
+
+        # Create enrollment record if course information is provided (for students)
+        enrollment_id = None
+        if user_data.course and user_data.branch and user_data.role == UserRole.STUDENT:
+            try:
+                from models.enrollment_models import Enrollment, PaymentStatus
+                from datetime import timedelta
+
+                # Create enrollment record in the proper collection
+                enrollment = Enrollment(
+                    student_id=user_dict["id"],
+                    course_id=user_data.course.course_id,
+                    branch_id=user_data.branch.branch_id,
+                    start_date=datetime.utcnow(),
+                    end_date=datetime.utcnow() + timedelta(days=365),  # Default 1 year
+                    fee_amount=0.0,  # Will be updated when payment is processed
+                    admission_fee=0.0,  # Will be updated when payment is processed
+                    payment_status=PaymentStatus.PENDING,
+                    enrollment_date=datetime.utcnow(),
+                    is_active=True
+                )
+
+                enrollment_result = await db.enrollments.insert_one(enrollment.dict())
+                enrollment_id = enrollment.id
+
+            except Exception as e:
+                # Log error but don't fail the registration if enrollment creation fails
+                print(f"❌ Error creating enrollment record: {e}")
+                pass
         
         # Send credentials via SMS (mock)
         course_info = "No course selected"
-        if user_dict.get("course"):
-            course = user_dict["course"]
-            course_info = f"Course: {course['course_id']} ({course['duration']})"
-            
         branch_info = "No branch assigned"
-        if user_dict.get("branch"):
-            branch = user_dict["branch"]
-            branch_info = f"Branch: {branch['branch_id']}"
-        
+
+        if enrollment_id and user_data.course and user_data.branch:
+            course_info = f"Course: {user_data.course.course_id} ({user_data.course.duration})"
+            branch_info = f"Branch: {user_data.branch.branch_id}"
+        elif user_data.branch_id:
+            branch_info = f"Branch: {user_data.branch_id}"
+
         sms_message = (
             f"Welcome {user_dict['full_name']}!\n"
             f"Your account has been created.\n"
@@ -102,7 +137,12 @@ class AuthController:
             details={"email": user_dict["email"], "role": user_dict["role"]}
         )
 
-        return {"message": "User registered successfully", "user_id": user_dict["id"]}
+        response_data = {"message": "User registered successfully", "user_id": user_dict["id"]}
+        if enrollment_id:
+            response_data["enrollment_id"] = enrollment_id
+            response_data["message"] = "User registered and enrolled successfully"
+
+        return response_data
 
     @staticmethod
     async def login(user_credentials: UserLogin, request: Request):

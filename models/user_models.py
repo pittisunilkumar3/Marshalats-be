@@ -10,6 +10,8 @@ class UserRole(str, Enum):
     COACH = "coach"
     STUDENT = "student"
 
+# DEPRECATED: These classes are being phased out in favor of proper enrollment records
+# They remain here temporarily for backward compatibility during migration
 class CourseInfo(BaseModel):
     category_id: str
     course_id: str
@@ -31,9 +33,8 @@ class BaseUser(BaseModel):
     is_active: bool = True
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
-    # Nested course and branch information
-    course: Optional[CourseInfo] = None
-    branch: Optional[BranchInfo] = None
+    # Branch assignment for staff members (coaches, admins)
+    branch_id: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -47,6 +48,10 @@ class UserCreate(BaseModel):
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
     biometric_id: Optional[str] = None
+    # Branch assignment for staff members (coaches, admins)
+    branch_id: Optional[str] = None
+    # DEPRECATED: Course enrollment should be handled via enrollments collection
+    # These fields remain for backward compatibility during migration
     course: Optional[CourseInfo] = None
     branch: Optional[BranchInfo] = None
 
@@ -71,7 +76,8 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     date_of_birth: Optional[date] = None
     gender: Optional[str] = None
-    # Nested course and branch information (preferred)
+    # DEPRECATED: Course enrollment should be handled via enrollments collection
+    # These fields remain for backward compatibility during migration
     course: Optional[CourseInfo] = None
     branch: Optional[BranchInfo] = None
     # Flat fields for backward compatibility

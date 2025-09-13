@@ -39,3 +39,12 @@ async def student_enroll_in_course(
     current_user: dict = Depends(require_role([UserRole.STUDENT]))
 ):
     return await EnrollmentController.student_enroll_in_course(enrollment_data, current_user)
+
+@router.get("/students/{student_id}")
+async def get_student_enrollments(
+    student_id: str,
+    active_only: bool = True,
+    current_user: dict = Depends(get_current_active_user)
+):
+    """Get all enrollments for a specific student - for dashboard edit page"""
+    return await EnrollmentController.get_student_enrollments(student_id, current_user, active_only)

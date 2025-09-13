@@ -195,6 +195,27 @@ class PaymentController:
 
             await db.payments.insert_one(payment.dict())
 
+            # Create enrollment record if not already created by registration
+            enrollment_id = user_result.get("enrollment_id")
+            if not enrollment_id:
+                from models.enrollment_models import Enrollment
+
+                enrollment = Enrollment(
+                    student_id=student_id,
+                    course_id=payment_data.course_id,
+                    branch_id=payment_data.branch_id,
+                    start_date=datetime.utcnow(),
+                    end_date=datetime.utcnow() + timedelta(days=365),  # Default 1 year
+                    fee_amount=payment_info.pricing.course_fee,
+                    admission_fee=payment_info.pricing.admission_fee,
+                    payment_status="paid",
+                    enrollment_date=datetime.utcnow(),
+                    is_active=True
+                )
+
+                await db.enrollments.insert_one(enrollment.dict())
+                enrollment_id = enrollment.id
+
             # Create notification for superadmin
             student_data = {
                 "id": student_id,
