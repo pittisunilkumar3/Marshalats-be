@@ -128,6 +128,71 @@ class CourseController:
         return serialize_doc(course)
 
     @staticmethod
+    async def get_courses_by_branch(
+        branch_id: str,
+        current_user: dict = None
+    ):
+        """Get courses assigned to a specific branch"""
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        try:
+            # First, get the branch to find assigned courses
+            branch = await db.branches.find_one({"id": branch_id})
+            if not branch:
+                raise HTTPException(status_code=404, detail=f"Branch not found: {branch_id}")
+
+            # Get course IDs assigned to this branch
+            course_ids = branch.get("assignments", {}).get("courses", [])
+
+            if not course_ids:
+                return {"courses": [], "total": 0}
+
+            # Fetch course details for assigned course IDs
+            courses = await db.courses.find({
+                "id": {"$in": course_ids},
+                "settings.active": True
+            }).to_list(length=100)
+
+            # Enhance courses with additional data
+            enhanced_courses = []
+            for course in courses:
+                # Get instructor assignments (coaches assigned to this course at this branch)
+                instructors = await db.coaches.find({
+                    "assignment_details.courses": course["id"],
+                    "branch_id": branch_id,
+                    "is_active": True
+                }).to_list(length=100)
+
+                # Get student enrollment count for this course at this branch
+                enrollment_count = await db.enrollments.count_documents({
+                    "course_id": course["id"],
+                    "branch_id": branch_id,
+                    "is_active": True
+                })
+
+                # Create enhanced course object
+                enhanced_course = serialize_doc(course)
+                # Use 'title' field for course name (not 'name')
+                enhanced_course.update({
+                    "name": course.get("title", course.get("name", "Unknown Course")),
+                    "enrolled_students": enrollment_count,
+                    "instructor_name": instructors[0].get("full_name", f"{instructors[0].get('first_name', '')} {instructors[0].get('last_name', '')}".strip()) if instructors else None,
+                    "instructor_count": len(instructors),
+                    "difficulty_level": course.get("difficulty_level", "Beginner")
+                })
+                enhanced_courses.append(enhanced_course)
+
+            return {"courses": enhanced_courses, "total": len(enhanced_courses)}
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+    @staticmethod
     async def update_course(
         course_id: str,
         course_update: CourseUpdate,

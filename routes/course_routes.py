@@ -58,6 +58,14 @@ async def get_course_stats(
 ):
     return await CourseController.get_course_stats(course_id, current_user)
 
+@router.get("/by-branch/{branch_id}")
+async def get_courses_by_branch(
+    branch_id: str,
+    current_user: dict = Depends(get_current_user_or_superadmin)
+):
+    """Get courses assigned to a specific branch"""
+    return await CourseController.get_courses_by_branch(branch_id, current_user)
+
 @router.get("/{course_id}/payment-info")
 async def get_course_payment_info(
     course_id: str,
