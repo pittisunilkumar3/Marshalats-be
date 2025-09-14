@@ -8,14 +8,16 @@ from .enrollment_controller import EnrollmentController
 from .payment_controller import PaymentController
 from .request_controller import RequestController
 from .event_controller import EventController
+from .reports_controller import ReportsController
 
 __all__ = [
     'AuthController',
-    'UserController', 
+    'UserController',
     'BranchController',
     'CourseController',
     'EnrollmentController',
     'PaymentController',
     'RequestController',
-    'EventController'
+    'EventController',
+    'ReportsController'
 ]

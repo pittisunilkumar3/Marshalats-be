@@ -24,7 +24,8 @@ from routes import (
     search_router,
     email_router,
     dashboard_router,
-    settings_router
+    settings_router,
+    reports_router
 )
 from routes.superadmin_routes import router as superadmin_router
 
@@ -88,6 +89,7 @@ app.include_router(search_router, prefix="/api/search", tags=["Search"])
 app.include_router(email_router, prefix="/api/email", tags=["Email"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(settings_router, prefix="/api/settings", tags=["Settings"])
+app.include_router(reports_router, prefix="/api/reports", tags=["Reports"])
 
 @app.get("/")
 async def root():
@@ -99,4 +101,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    uvicorn.run(app, host="0.0.0.0", port=8004)
