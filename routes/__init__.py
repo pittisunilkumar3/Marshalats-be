@@ -16,6 +16,7 @@ from .event_routes import router as event_router
 from .search_routes import router as search_router
 from .email_routes import router as email_router
 from .dashboard_routes import router as dashboard_router
+from .settings_routes import router as settings_router
 
 __all__ = [
     'auth_router',
@@ -33,5 +34,6 @@ __all__ = [
     'event_router',
     'search_router',
     'email_router',
-    'dashboard_router'
+    'dashboard_router',
+    'settings_router'
 ]

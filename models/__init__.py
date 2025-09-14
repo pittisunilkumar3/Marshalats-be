@@ -22,6 +22,11 @@ from .coursechange_models import CourseChangeRequestStatus, CourseChangeRequest,
 from .event_models import Event, EventCreate
 from .qr_models import QRCodeSession
 from .student_models import StudentEnrollmentCreate, StudentPaymentCreate, StudentRegistrationPayment, PaymentCalculation, CoursePaymentInfo
+from .settings_models import (
+    SystemConfiguration, EmailConfiguration, NotificationSettings, SecuritySettings, BackupSettings,
+    SystemSettings, SystemSettingsCreate, SystemSettingsUpdate, SystemSettingsResponse,
+    SystemSettingsFlatCreate, SystemSettingsFlatResponse
+)
 
 __all__ = [
     # User models
