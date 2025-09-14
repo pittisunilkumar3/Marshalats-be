@@ -22,7 +22,7 @@ load_dotenv(ROOT_DIR / '.env')
 class ComprehensiveEmailSolution:
     def __init__(self):
         self.test_email = "pittisunilkumar3@gmail.com"
-        self.backend_url = "http://localhost:8004"
+        self.backend_url = "http://localhost:8003"
         
         # Primary SMTP configuration (cPanel)
         self.primary_smtp = {
