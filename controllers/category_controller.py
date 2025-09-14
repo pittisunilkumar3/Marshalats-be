@@ -381,7 +381,14 @@ class CategoryController:
                 for course in course_list:
                     # Get available durations for this course
                     durations = await db.durations.find({"is_active": True}).to_list(100)
-                    duration_options = [dur["code"] for dur in durations]
+                    duration_options = []
+                    for dur in durations:
+                        duration_options.append({
+                            "id": dur["id"],
+                            "name": dur["name"],
+                            "duration_months": dur["duration_months"],
+                            "pricing_multiplier": dur.get("pricing_multiplier", 1.0)
+                        })
 
                     course_data = {
                         "id": course["id"],
@@ -392,7 +399,7 @@ class CategoryController:
                             "currency": course.get("pricing", {}).get("currency", "INR"),
                             "amount": course.get("pricing", {}).get("amount", 0)
                         },
-                        "duration_options": duration_options
+                        "available_durations": duration_options
                     }
                     courses.append(course_data)
 
@@ -486,7 +493,6 @@ class CategoryController:
                     duration_data = {
                         "id": duration["id"],
                         "name": duration["name"],
-                        "code": duration["code"],
                         "duration_months": duration["duration_months"],
                         "pricing_multiplier": multiplier,
                         "final_price": final_price
@@ -600,7 +606,6 @@ class CategoryController:
                 duration_data = {
                     "id": duration["id"],
                     "name": duration["name"],
-                    "code": duration["code"],
                     "duration_months": duration["duration_months"],
                     "pricing_multiplier": multiplier,
                     "final_price": final_price

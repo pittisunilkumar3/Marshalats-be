@@ -417,7 +417,6 @@ class CourseController:
                     duration_data = {
                         "id": duration["id"],
                         "name": duration["name"],
-                        "code": duration["code"],
                         "duration_months": duration["duration_months"],
                         "pricing_multiplier": multiplier
                     }
@@ -567,7 +566,7 @@ class CourseController:
                     duration_data = {
                         "id": duration["id"],
                         "name": duration["name"],
-                        "code": duration["code"],
+                        "duration_months": duration["duration_months"],
                         "final_price": final_price
                     }
                     available_durations.append(duration_data)

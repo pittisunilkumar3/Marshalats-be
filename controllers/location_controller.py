@@ -88,6 +88,37 @@ class LocationController:
         }
 
     @staticmethod
+    async def get_states(
+        active_only: bool = True
+    ):
+        """Get unique states from locations - Public endpoint (no authentication required)"""
+        db = get_db()
+
+        # Build query
+        query = {}
+        if active_only:
+            query["is_active"] = True
+
+        # Get unique states using aggregation
+        pipeline = [
+            {"$match": query},
+            {"$group": {"_id": "$state", "count": {"$sum": 1}}},
+            {"$sort": {"_id": 1}}
+        ]
+
+        states_cursor = db.locations.aggregate(pipeline)
+        states_data = await states_cursor.to_list(100)
+
+        # Format states for frontend consumption
+        states = [{"state": state_doc["_id"], "location_count": state_doc["count"]} for state_doc in states_data]
+
+        return {
+            "message": f"Retrieved {len(states)} states successfully",
+            "states": states,
+            "total": len(states)
+        }
+
+    @staticmethod
     async def get_locations_with_branches(
         active_only: bool = True,
         skip: int = 0,
@@ -314,9 +345,9 @@ class LocationController:
         # Enrich locations with branch and course data
         enriched_locations = []
         for location in locations:
-            # Get branches in this location
+            # Get branches in this location using location_id
             branch_query = {
-                "branch.address.city": {"$regex": location["name"], "$options": "i"}
+                "location_id": location["id"]
             }
             if active_only:
                 branch_query["is_active"] = True
@@ -393,9 +424,9 @@ class LocationController:
         if not location:
             raise HTTPException(status_code=404, detail="Location not found")
 
-        # Find branches in this location
+        # Find branches in this location using location_id
         branch_query = {
-            "branch.address.city": {"$regex": location["name"], "$options": "i"}
+            "location_id": location_id
         }
         if active_only:
             branch_query["is_active"] = True

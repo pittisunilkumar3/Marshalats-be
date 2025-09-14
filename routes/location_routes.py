@@ -47,6 +47,13 @@ async def get_locations_with_details(
     """Get location details with associated branches - Public endpoint (no authentication required)"""
     return await LocationController.get_locations_with_details(location_id, include_branches, include_courses, active_only, skip, limit)
 
+@router.get("/public/states")
+async def get_states(
+    active_only: bool = True
+):
+    """Get unique states from locations - Public endpoint (no authentication required)"""
+    return await LocationController.get_states(active_only)
+
 @router.get("/{location_id}")
 async def get_location(
     location_id: str,

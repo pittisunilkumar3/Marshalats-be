@@ -115,6 +115,54 @@ class BranchController:
         return {"branches": serialize_doc(enhanced_branches)}
 
     @staticmethod
+    async def get_branches_public(
+        active_only: bool = True,
+        skip: int = 0,
+        limit: int = 100
+    ):
+        """Get all branches - Public endpoint (no authentication required)"""
+        db = get_db()
+
+        # Build query
+        query = {}
+        if active_only:
+            query["is_active"] = True
+
+        # Apply pagination with limit for public endpoint
+        if limit > 100:
+            limit = 100  # Cap at 100 for public endpoint
+
+        # Get branches
+        branches_cursor = db.branches.find(query).skip(skip).limit(limit)
+        branches = await branches_cursor.to_list(limit)
+
+        # Get total count
+        total = await db.branches.count_documents(query)
+
+        # Format branches for public consumption
+        formatted_branches = []
+        for branch in branches:
+            formatted_branch = {
+                "id": branch.get("id"),
+                "name": branch.get("branch", {}).get("name"),
+                "code": branch.get("branch", {}).get("code"),
+                "email": branch.get("branch", {}).get("email"),
+                "phone": branch.get("branch", {}).get("phone"),
+                "address": branch.get("branch", {}).get("address", {}),
+                "location_id": branch.get("location_id"),
+                "is_active": branch.get("is_active", True)
+            }
+            formatted_branches.append(formatted_branch)
+
+        return {
+            "message": f"Retrieved {len(formatted_branches)} branches successfully",
+            "branches": formatted_branches,
+            "total": total,
+            "skip": skip,
+            "limit": limit
+        }
+
+    @staticmethod
     async def get_branch(
         branch_id: str,
         current_user: dict = None

@@ -41,6 +41,7 @@ class BankDetails(BaseModel):
 class Branch(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     branch: BranchInfo
+    location_id: str  # Reference to location
     manager_id: str
     operational_details: OperationalDetails
     assignments: Assignments
@@ -51,6 +52,7 @@ class Branch(BaseModel):
 
 class BranchCreate(BaseModel):
     branch: BranchInfo
+    location_id: str  # Reference to location
     manager_id: str
     operational_details: OperationalDetails
     assignments: Assignments
@@ -58,6 +60,7 @@ class BranchCreate(BaseModel):
 
 class BranchUpdate(BaseModel):
     branch: Optional[BranchInfo] = None
+    location_id: Optional[str] = None  # Reference to location
     manager_id: Optional[str] = None
     operational_details: Optional[OperationalDetails] = None
     assignments: Optional[Assignments] = None
