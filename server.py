@@ -28,6 +28,7 @@ from routes import (
     reports_router
 )
 from routes.superadmin_routes import router as superadmin_router
+from routes.branches_with_courses_routes import router as branches_with_courses_router
 
 # Import database utility
 from utils.database import db
@@ -90,6 +91,7 @@ app.include_router(email_router, prefix="/api/email", tags=["Email"])
 app.include_router(dashboard_router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(settings_router, prefix="/api/settings", tags=["Settings"])
 app.include_router(reports_router, prefix="/api/reports", tags=["Reports"])
+app.include_router(branches_with_courses_router, prefix="/api", tags=["Branches with Courses"])
 
 @app.get("/")
 async def root():

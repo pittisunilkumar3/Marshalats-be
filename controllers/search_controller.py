@@ -367,3 +367,177 @@ class SearchController:
             "count": len(branches),
             "message": f"Found {len(branches)} branches matching '{query}'"
         }
+
+    @staticmethod
+    async def search_students(
+        query: Optional[str] = None,
+        branch_id: Optional[str] = None,
+        course_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+        current_user: dict = None
+    ):
+        """
+        Comprehensive student search with filtering by branch, course, and activity status
+        Integrates with enrollments to provide course and branch relationships
+        """
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        db = get_db()
+
+        # Build base filter for students
+        student_filter = {"role": "student"}
+
+        # Apply text search if query provided
+        if query and len(query.strip()) >= 2:
+            search_pattern = {"$regex": re.escape(query.strip()), "$options": "i"}
+            student_filter["$or"] = [
+                {"full_name": search_pattern},
+                {"first_name": search_pattern},
+                {"last_name": search_pattern},
+                {"email": search_pattern},
+                {"phone": search_pattern},
+                {"id": search_pattern}
+            ]
+
+        # Apply active status filter
+        if is_active is not None:
+            student_filter["is_active"] = is_active
+
+        # Apply date range filter (filter by user creation date)
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                try:
+                    from datetime import datetime
+                    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                    date_filter["$gte"] = start_dt
+                except (ValueError, AttributeError):
+                    pass  # Skip invalid date format
+
+            if end_date:
+                try:
+                    from datetime import datetime
+                    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                    # Add one day to include the end date
+                    from datetime import timedelta
+                    end_dt = end_dt + timedelta(days=1)
+                    date_filter["$lt"] = end_dt
+                except (ValueError, AttributeError):
+                    pass  # Skip invalid date format
+
+            if date_filter:
+                student_filter["created_at"] = date_filter
+
+        # Apply role-based access control
+        current_role = current_user.get("role")
+        if isinstance(current_role, str):
+            try:
+                current_role = UserRole(current_role)
+            except ValueError:
+                current_role = None
+
+        if current_role == UserRole.COACH_ADMIN:
+            if current_user.get("branch_id"):
+                branch_id = current_user["branch_id"]  # Override branch filter for coach admin
+        elif current_role == UserRole.COACH:
+            if current_user.get("branch_id"):
+                branch_id = current_user["branch_id"]  # Override branch filter for coach
+
+        # Get students matching the base criteria
+        students_cursor = db.users.find(student_filter).skip(skip).limit(limit)
+        students = await students_cursor.to_list(length=limit)
+
+        # Get total count for pagination
+        total_students = await db.users.count_documents(student_filter)
+
+        # If branch or course filtering is required, we need to join with enrollments
+        if branch_id or course_id:
+            student_ids = [student["id"] for student in students]
+
+            # Build enrollment filter
+            enrollment_filter = {"student_id": {"$in": student_ids}}
+            if branch_id and branch_id != "all":
+                enrollment_filter["branch_id"] = branch_id
+            if course_id and course_id != "all":
+                enrollment_filter["course_id"] = course_id
+
+            # Get matching enrollments
+            enrollments = await db.enrollments.find(enrollment_filter).to_list(length=None)
+
+            # Filter students based on enrollment matches
+            enrolled_student_ids = set(enrollment["student_id"] for enrollment in enrollments)
+            students = [student for student in students if student["id"] in enrolled_student_ids]
+
+        # Enrich student data with enrollment information
+        enriched_students = []
+        for student in students:
+            # Get student's enrollments
+            student_enrollments = await db.enrollments.find(
+                {"student_id": student["id"], "is_active": True}
+            ).to_list(length=None)
+
+            # Get course and branch details for each enrollment
+            courses = []
+            branches = []
+
+            for enrollment in student_enrollments:
+                # Get course details
+                course = await db.courses.find_one({"id": enrollment["course_id"]})
+                if course:
+                    courses.append({
+                        "id": course["id"],
+                        "name": course.get("name", course.get("title", "Unknown Course")),
+                        "code": course.get("code", ""),
+                        "enrollment_date": enrollment["enrollment_date"],
+                        "start_date": enrollment["start_date"],
+                        "end_date": enrollment["end_date"],
+                        "payment_status": enrollment.get("payment_status", "unknown")
+                    })
+
+                # Get branch details
+                branch = await db.branches.find_one({"id": enrollment["branch_id"]})
+                if branch:
+                    branch_info = {
+                        "id": branch["id"],
+                        "name": branch.get("branch", {}).get("name", "Unknown Branch"),
+                        "code": branch.get("branch", {}).get("code", ""),
+                        "enrollment_date": enrollment["enrollment_date"]
+                    }
+                    # Avoid duplicate branches
+                    if not any(b["id"] == branch_info["id"] for b in branches):
+                        branches.append(branch_info)
+
+            # Clean sensitive data
+            student_data = student.copy()
+            student_data.pop("password", None)
+
+            # Add enriched data
+            enriched_student = {
+                **student_data,
+                "courses": courses,
+                "branches": branches,
+                "total_enrollments": len(student_enrollments),
+                "active_enrollments": len([e for e in student_enrollments if e.get("is_active", True)])
+            }
+
+            enriched_students.append(enriched_student)
+
+        return {
+            "students": serialize_doc(enriched_students),
+            "total": len(enriched_students),  # Actual filtered count
+            "total_students": total_students,  # Total students before enrollment filtering
+            "skip": skip,
+            "limit": limit,
+            "filters": {
+                "query": query,
+                "branch_id": branch_id,
+                "course_id": course_id,
+                "is_active": is_active
+            },
+            "message": f"Found {len(enriched_students)} students" + (f" matching '{query}'" if query else "")
+        }
